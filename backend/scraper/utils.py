@@ -81,7 +81,14 @@ def scrape_sponsors(username):
         return sponsors_list, private_sponsors
 
 
+# Returns a list of usernames who are bering sponsored by the passed in user
 def scrape_sponsoring(username, type):
+
+    #
+    if type == "user":
+        return
+    if type == "organization":
+        return
 
     return
 
