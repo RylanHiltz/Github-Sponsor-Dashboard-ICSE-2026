@@ -1,22 +1,32 @@
 import time
+from backend.utils.db_conn import db_connection
 
-# from utils.db_conn import db_connection
+# DB Queries
+from backend.db.queries import getFirstInQueue, findUser
 
 
 class ScraperWorker:
     def run(self):
-        while True:
-            print("Worker has been started")
 
+        # Establish database connection
+        conn = db_connection()
+        print("Worker has been started")
+
+        while True:
             #  Fetch first user from queue
+            data = getFirstInQueue(db=conn)
 
             #  Check if user is in database? = FALSE
-            #       Create the user, and pull data from Github API (is_enriched == TRUE)
-
-            #  Check if user is in database? = TRUE
-            #       Check if user is_enriched? = FALSE (User was enqueued from a sponsorship relation)
-            #               Since user is being crawled, enrich user metadata from Github API / gender inference
-            #               Set is_enriched to TRUE
+            user_exists = findUser(username=data["username"], db=conn)
+            if not user_exists:
+                # Create the user, and pull data from Github API (is_enriched == TRUE)
+                continue
+            else:
+                # Check if user is in database? = TRUE
+                #       Check if user is_enriched? = FALSE (User was enqueued from a sponsorship relation)
+                #       Since user is being crawled, enrich user metadata from Github API / gender inference
+                #       Set is_enriched to TRUE
+                continue
 
             # !User should not be is_enriched, and waiting for queue, this does not follow the logic and should never happen!
 
