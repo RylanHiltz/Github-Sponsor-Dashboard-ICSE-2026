@@ -8,6 +8,7 @@ class UserModel:
     username: str
     name: str
     type: str
+    has_pronouns: bool
     gender: Optional[str]
     location: Optional[str]
     avatar_url: str
@@ -20,6 +21,7 @@ class UserModel:
     public_repos: int
     public_gists: int
     twitter_username: Optional[str]
+    private_sponsor_count: int
     last_scraped: Optional[datetime]
     is_enriched: Optional[bool]
 
@@ -29,6 +31,7 @@ class UserModel:
             username=data["login"],
             name=data["name"],
             type=data["type"],
+            has_pronouns=data.get("has_pronouns", False),
             gender=None,
             location=data["location"],
             avatar_url=data["avatar_url"],
@@ -41,6 +44,7 @@ class UserModel:
             public_repos=data["public_repos"],
             public_gists=data["public_gists"],
             twitter_username=data.get("twitter_username"),
+            private_sponsor_count=0,
             last_scraped=None,
             is_enriched=None,
         )
