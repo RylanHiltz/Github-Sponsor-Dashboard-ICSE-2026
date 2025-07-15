@@ -68,8 +68,9 @@ def createUser(username, db):
         )
         db.commit()
         cur.close()
-        print(f"Inserted user {user.username}")
-        return True
+        print(f"Created user: {user.username}")
+    # Returns the type of the user after getting metadata for scraping
+    return user.type
 
 
 def getUserData(username):
@@ -113,7 +114,6 @@ def getLocation(location):
     response = requests.get(url=url, headers=headers)
     if response.status_code == 200:
         data = response.json()
-        print(data)
         country = data[0]["address"]["country"]
         return country
     else:
@@ -126,7 +126,7 @@ def getGender(name, country):
     # Use gpt-4o-mini for gender inferencing
     client = OpenAI(api_key=API_KEY)
     response = client.chat.completions.create(
-        model="gpt-4.1",
+        model="gpt-4o-mini",
         messages=[
             {
                 "role": "system",
@@ -147,8 +147,11 @@ def getGender(name, country):
 
 
 def findUser(username, db):
-
-    return False
+    with db.cursor() as cur:
+        cur.execute("SELECT 1 FROM users WHERE username = %s LIMIT 1;", (username,))
+        exists = cur.fetchone() is not None
+        cur.close()
+        return exists
 
 
 # User already exists from previous sponsorship relation, run Github API request, collect and update user data
@@ -205,8 +208,9 @@ def enrichUser(username, db):
         )
         db.commit()
         cur.close()
-        print(f"Updated user {user.username}")
-        return True
+        print(f"Enriched user: {user.username}")
+    # Returns the type of the user after getting metadata for scraping
+    return user.type
 
 
 # Deletes a specfic user
@@ -228,4 +232,4 @@ def deleteUser(user, db):
 # getLocation("İstanbul")
 # createUser("yyx990803")
 # getGender("Rylan Hiltz", "Canada")
-# getUserData("sakura-ryoko")
+getUserData("sakura-ryoko")

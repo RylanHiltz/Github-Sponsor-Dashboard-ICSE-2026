@@ -10,6 +10,7 @@ def scrape_sponsors(username):
     private_sponsors = 0  # Private sponsors who do not have accessible Github's
     user_sponsors = list()  # Array of user sponsors
     org_sponsors = list()  # Array of organization sponsors
+    sponsors_list = list()
 
     with sync_playwright() as p:
 
@@ -56,13 +57,6 @@ def scrape_sponsors(username):
                 "a[data-hovercard-type='organization']"
             )
 
-        # Collect public user sponsor names
-        for sponsor in user_links:
-            href = sponsor.get_attribute("href")
-            if href:
-                sponsor_name = href.strip("/").split("/")[-1]
-                user_sponsors.append(sponsor_name)
-
         # Collect public organization sponsor names
         for sponsor in org_links:
             href = sponsor.get_attribute("href")
@@ -70,41 +64,46 @@ def scrape_sponsors(username):
                 sponsor_name = href.strip("/").split("/")[-1]
                 org_sponsors.append(sponsor_name)
 
+        # Collect public user sponsor names
+        for sponsor in user_links:
+            href = sponsor.get_attribute("href")
+            if href:
+                sponsor_name = href.strip("/").split("/")[-1]
+                user_sponsors.append(sponsor_name)
+
         browser.close()
+
         sponsors_list = user_sponsors + org_sponsors
 
         # If the sponsor count was able to be extracted, calculate private sponsors
         if sponsor_count:
             private_sponsors = sponsor_count - len(sponsors_list)
 
-        print(sponsors_list)
         print("Number of sponsors: ", len(sponsors_list) + private_sponsors)
         print("Private sponsors: ", private_sponsors)
         print("User sponsors: ", len(user_sponsors))
         print("Org sponsors: ", len(org_sponsors))
-        return user_sponsors, org_sponsors, private_sponsors
+        return sponsors_list, private_sponsors
 
 
 # Returns a list of usernames who are being sponsored by the passed in user/org
 def scrape_sponsoring(name, type):
 
-    # Scrape user sponsoring page
-    if type == "user":
-        sponsoring_users, sponsoring_orgs = user_sponsoring(username=name)
+    if type == "User":
+        sponsoring_arr = user_sponsoring(username=name)
+    elif type == "Organization":
+        sponsoring_arr = org_sponsoring(org_name=name)
+    else:
+        print(f"Unknown type: {type}")
+        sponsoring_arr = []
 
-    # Scrape organization sponsoring page
-    if type == "organization":
-        sponsoring_users, sponsoring_orgs = org_sponsoring(org_name=name)
-
-    # Returns 2 list of the users and orgs that the specific user/org are sponsoring
-    return sponsoring_users, sponsoring_orgs
+    return sponsoring_arr
 
 
 # Scrapes the sponsoring page of the passed in user
 def user_sponsoring(username):
 
-    sponsoring_orgs = list()
-    sponsoring_users = list()
+    sponsoring_arr = list()
 
     with sync_playwright() as p:
 
@@ -136,26 +135,23 @@ def user_sponsoring(username):
                             href = sponsored.get_attribute("href")
                             if href:
                                 sponsored_name = href.strip("/").split("/")[-1]
-                                sponsoring_users.append(sponsored_name)
+                                sponsoring_arr.append(sponsored_name)
 
                         # Collect sponsored organizations
                         for sponsored in org_links:
                             href = sponsored.get_attribute("href")
                             if href:
                                 sponsored_name = href.strip("/").split("/")[-1]
-                                sponsoring_orgs.append(sponsored_name)
+                                sponsoring_arr.append(sponsored_name)
 
         browser.close()
-        print("Sponsored Orgs: ", sponsoring_orgs)
-        print("Sponsored Users: ", sponsoring_users)
-        return sponsoring_users, sponsoring_orgs
+        return sponsoring_arr
 
 
 # Scrapes the sponsoring page of the organization
 def org_sponsoring(org_name):
 
-    sponsoring_orgs = list()
-    sponsoring_users = list()
+    sponsoring_list = list()
 
     with sync_playwright() as p:
 
@@ -177,11 +173,6 @@ def org_sponsoring(org_name):
                         href = link.get_attribute("href")
                         if href:
                             user = href.strip("/").split("/")[-1]
-                            if is_org:
-                                sponsoring_orgs.add(user)
-                            else:
-                                sponsoring_users.add(user)
+                            sponsoring_list.append(user)
         browser.close()
-        print("Sponsored Orgs: ", sponsoring_orgs)
-        print("Sponsored Users: ", sponsoring_users)
-        return sponsoring_users, sponsoring_orgs
+        return sponsoring_list
