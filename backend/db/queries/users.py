@@ -6,8 +6,10 @@ import requests
 import json
 from openai import OpenAI
 
+# Scraper imports
+from playwright.sync_api import sync_playwright
 
-# Load Github auth token for API calls
+# Load sensitive variables
 load_dotenv()
 GITHUB_TOKEN = os.getenv("PAT")
 EMAIL = os.getenv("email")
@@ -17,7 +19,12 @@ API_KEY = os.getenv("API_KEY")
 # File for query logic that will be used/imported into the scraper
 def createUser(username, db):
 
-    user = getUserData(username)
+    try:
+        user = getUserData(username)
+    except FileNotFoundError as e:
+        print(e)
+        deleteUser(username, db)
+        return None
     if user is None:
         return None
 
@@ -28,6 +35,7 @@ def createUser(username, db):
                 username,
                 name,
                 type,
+                has_pronouns,
                 gender,
                 location,
                 avatar_url,
@@ -43,13 +51,14 @@ def createUser(username, db):
                 last_scraped,
                 is_enriched
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (username) DO NOTHING;
             """,
             (
                 user.username,
                 user.name,
                 user.type,
+                user.has_pronouns,
                 user.gender,
                 user.location,
                 user.avatar_url,
@@ -73,6 +82,25 @@ def createUser(username, db):
     return user.type
 
 
+# Batch create minimum users for sponsorship relations
+def batchCreateUser(usernames, db):
+
+    entries = [(username,) for username in usernames]
+
+    with db.cursor() as cur:
+        cur.executemany(
+            """
+            INSERT INTO users (username)
+            VALUES (%s)
+            ON CONFLICT (username) DO NOTHING;
+            """,
+            entries,
+        )
+    db.commit()
+    cur.close()
+    return
+
+
 def getUserData(username):
     # Call Github REST API to get the metadata for user
     url = f"https://api.github.com/users/{username}"
@@ -82,13 +110,20 @@ def getUserData(username):
     }
 
     response = requests.get(url=url, headers=headers)
+
     if response.status_code == 200:
         data = response.json()
         user = UserModel.from_api(data)
+
         if user.location != None:
             user.location = getLocation(user.location)
+
         if user.type == "User":
-            user.gender = getGender(user.name, user.location)
+            user.has_pronouns, user.gender = scrapePronouns(user.username)
+            # If user does not have pronouns, infer gender based on name and country
+            if not user.has_pronouns:
+                user.gender = getGender(user.name, user.location)
+
         user.is_enriched = True
         print(user)
         return user
@@ -121,6 +156,43 @@ def getLocation(location):
         return None
 
 
+# Scrapes the pronouns of a passed in user
+def scrapePronouns(name):
+    with sync_playwright() as p:
+
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        url = f"https://github.com/{name}"
+
+        context = browser.new_context(storage_state="auth.json")
+        page = context.new_page()
+        page.goto(url)
+
+        # content = page.content()
+        pronoun_span = page.query_selector("span[itemprop='pronouns']")
+        pronouns = pronoun_span.inner_text()
+
+        if pronouns:
+            pronouns_list = [p.strip() for p in pronouns.split("/")]
+            has_pronouns = True
+            if any(p.lower() in ["he", "him"] for p in pronouns_list):
+                gender = "Male"
+            elif any(p.lower() in ["she", "her"] for p in pronouns_list):
+                gender = "Female"
+            elif any(p.lower() in ["they", "them"] for p in pronouns_list):
+                gender = "Other"
+            else:
+                gender = "Unknown"
+        else:
+            gender = None
+            has_pronouns = False
+
+        print(has_pronouns, gender)
+        browser.close()
+        return has_pronouns, gender
+
+
 # Infer the gender of the username using the full name and current country (assuming place of origin for some users)
 def getGender(name, country):
     # Use gpt-4o-mini for gender inferencing
@@ -146,12 +218,28 @@ def getGender(name, country):
     return gender
 
 
+# Check if the passed in username exists in the DB
 def findUser(username, db):
     with db.cursor() as cur:
         cur.execute("SELECT 1 FROM users WHERE username = %s LIMIT 1;", (username,))
         exists = cur.fetchone() is not None
         cur.close()
         return exists
+
+
+def batchGetUserId(user_arr, db):
+
+    with db.cursor() as cur:
+        query = """
+            SELECT id, username 
+            FROM users 
+            WHERE username = ANY(%s)
+        """
+        cur.execute(query, (user_arr,))
+        rows = cur.fetchall()
+        # Convert to a dict or list as needed
+        return {username: id for id, username in rows}
+    return
 
 
 # User already exists from previous sponsorship relation, run Github API request, collect and update user data
@@ -171,6 +259,8 @@ def enrichUser(username, db):
             """
             UPDATE users SET
                 name = %s,
+                type = %s,
+                has_pronouns = %s,
                 gender = %s,
                 location = %s,
                 avatar_url = %s,
@@ -189,6 +279,8 @@ def enrichUser(username, db):
             """,
             (
                 user.name,
+                user.type,
+                user.has_pronouns,
                 user.gender,
                 user.location,
                 user.avatar_url,
@@ -232,4 +324,4 @@ def deleteUser(user, db):
 # getLocation("İstanbul")
 # createUser("yyx990803")
 # getGender("Rylan Hiltz", "Canada")
-getUserData("sakura-ryoko")
+# getUserData("p-chan")
