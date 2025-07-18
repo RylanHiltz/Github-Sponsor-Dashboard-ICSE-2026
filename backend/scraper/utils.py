@@ -23,7 +23,7 @@ def scrape_sponsors(username):
         if page.url == f"https://github.com/{username}":
             print(f"{username} is not in the sponsors program.")
             # These should all be null/empty
-            return user_sponsors, org_sponsors, private_sponsors
+            return [], 0
 
         while True:
             show_more_clicked = False

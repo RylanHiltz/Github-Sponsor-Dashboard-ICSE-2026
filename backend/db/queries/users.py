@@ -78,8 +78,8 @@ def createUser(username, db):
         db.commit()
         cur.close()
         print(f"Created user: {user.username}")
-    # Returns the type of the user after getting metadata for scraping
-    return user.type
+    # Returns the user object to the worker
+    return user
 
 
 # Batch create minimum users for sponsorship relations
@@ -171,19 +171,19 @@ def scrapePronouns(name):
 
         # content = page.content()
         pronoun_span = page.query_selector("span[itemprop='pronouns']")
-        pronouns = pronoun_span.inner_text()
-
-        if pronouns:
-            pronouns_list = [p.strip() for p in pronouns.split("/")]
-            has_pronouns = True
-            if any(p.lower() in ["he", "him"] for p in pronouns_list):
-                gender = "Male"
-            elif any(p.lower() in ["she", "her"] for p in pronouns_list):
-                gender = "Female"
-            elif any(p.lower() in ["they", "them"] for p in pronouns_list):
-                gender = "Other"
-            else:
-                gender = "Unknown"
+        if pronoun_span:
+            pronouns = pronoun_span.inner_text()
+            if pronouns:
+                pronouns_list = [p.strip() for p in pronouns.split("/")]
+                has_pronouns = True
+                if any(p.lower() in ["he", "him"] for p in pronouns_list):
+                    gender = "Male"
+                elif any(p.lower() in ["she", "her"] for p in pronouns_list):
+                    gender = "Female"
+                elif any(p.lower() in ["they", "them"] for p in pronouns_list):
+                    gender = "Other"
+                else:
+                    gender = "Unknown"
         else:
             gender = None
             has_pronouns = False
@@ -197,18 +197,22 @@ def scrapePronouns(name):
 def getGender(name, country):
     # Use gpt-4o-mini for gender inferencing
     client = OpenAI(api_key=API_KEY)
+    user_message = f"full name: {name}"
+    if country is not None:
+        user_message += f", current location: {country}"
+
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {
                 "role": "system",
                 "content": """
-                    Infer gender using full name & current location. Only output valid json in this format: { "gender": "Male" }, { "gender": "Female" }, or { "gender": "Unknown" }
+                    Infer gender using fullname. Only output valid json in this format (Try not to output Unknown): { "gender": "Male" }, { "gender": "Female" }, or { "gender": "Unknown" }
                 """,
             },
             {
                 "role": "user",
-                "content": f"full name: {name}, current location: {country}",
+                "content": user_message,
             },
         ],
     )
@@ -221,12 +225,16 @@ def getGender(name, country):
 # Check if the passed in username exists in the DB
 def findUser(username, db):
     with db.cursor() as cur:
-        cur.execute("SELECT 1 FROM users WHERE username = %s LIMIT 1;", (username,))
-        exists = cur.fetchone() is not None
+        cur.execute("SELECT id FROM users WHERE username = %s LIMIT 1;", (username,))
+        row = cur.fetchone()
         cur.close()
-        return exists
+        if row:
+            return True, row[0]
+        else:
+            return False, None
 
 
+# Returns an array of user id's mapped to the specific usernames
 def batchGetUserId(user_arr, db):
 
     with db.cursor() as cur:
@@ -238,7 +246,7 @@ def batchGetUserId(user_arr, db):
         cur.execute(query, (user_arr,))
         rows = cur.fetchall()
         # Convert to a dict or list as needed
-        return {username: id for id, username in rows}
+        return [id for id, username in rows]
     return
 
 
@@ -302,7 +310,7 @@ def enrichUser(username, db):
         cur.close()
         print(f"Enriched user: {user.username}")
     # Returns the type of the user after getting metadata for scraping
-    return user.type
+    return user
 
 
 # Deletes a specfic user
@@ -319,9 +327,3 @@ def deleteUser(user, db):
         cur.close()
         print(f"Deleted {user}")
         return
-
-
-# getLocation("İstanbul")
-# createUser("yyx990803")
-# getGender("Rylan Hiltz", "Canada")
-# getUserData("p-chan")
