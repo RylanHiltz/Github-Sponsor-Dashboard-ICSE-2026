@@ -11,6 +11,7 @@ from backend.db.queries.users import (
     batchCreateUser,
     batchGetUserId,
     getUserData,
+    finalizeUserScrape,
 )
 from backend.db.queries.sponsors import createSponsoring, createSponsors
 from backend.db.queries.user_activity import getUserActivity
@@ -50,18 +51,23 @@ class ScraperWorker:
             username = data["username"]
             depth = data["depth"]
 
+            # If the users depth exceeds MAX_DEPTH to crawl, skip the use
+            if depth > MAX_DEPTH:
+                updateStatus("username", "skipped")
+                continue
+
             # Check if the user exists
-            user_exists, user_id = findUser(username, db=conn)
+            user_exists = findUser(username, db=conn)
 
             # User exists in DB from previous sponsor relation
             if user_exists:
                 # Enrich user metadata from Github API / gender inference
-                user = enrichUser(username, db=conn)
+                user, user_id = enrichUser(username, db=conn)
             # User does not exist in DB, create new user
             else:
-                user = createUser(username, db=conn)
+                user, user_id = createUser(username, db=conn)
 
-            # !User should not be is_enriched, and waiting for queue, this does not follow the logic and should never happen!
+            # !User should not be is_enriched, and "pending" in queue, this does not follow the logic and should never happen!
 
             #  Crawl the user for sponsorship relations (bi-directional)
             sponsors, private_sponsor_count = scrape_sponsors(username)
@@ -73,8 +79,9 @@ class ScraperWorker:
 
             # Add users and organizations to the users table & queue (name and is_enriched defaults to FALSE)
             # Increment the depth by 1? (still need to figure out this logic)
-            batchAddQueue(unique_users, depth=(depth + 1), db=conn)
-            batchCreateUser(unique_users, db=conn)
+            if unique_users:
+                batchAddQueue(unique_users, depth=(depth + 1), db=conn)
+                batchCreateUser(unique_users, db=conn)
 
             # If the user has sponsors, create the relations in the DB
             if sponsors:
@@ -93,16 +100,16 @@ class ScraperWorker:
             # Update staus of the crawled user
             updateStatus(user=username, status="completed", db=conn)
 
+            # Set last_scraped to the current time
+            finalizeUserScrape(username, private_sponsor_count, conn)
+
+            # Print the elapsed time taken to crawl the current user
             end = time.time()
             elapsed = end - start
-            print(f"time for 1 user crawled: {elapsed:.4f}")
+            print(f"user {username} crawled: {elapsed:.4f} seconds elapsed")
             break
 
-            # ?Log API usage, maybe add feature to pause worker if the api runs out mid way scraping to preserve data?
-            #  Set last_scraped to the current time
-            #  Also set the private sponsor amount in the same function/db call
-
-            time.sleep(5)  # Wait before checking queue again
+            time.sleep(2)  # Wait before checking queue again
 
 
 if __name__ == "__main__":

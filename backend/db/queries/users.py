@@ -9,6 +9,12 @@ from openai import OpenAI
 # Scraper imports
 from playwright.sync_api import sync_playwright
 
+from backend.utils.github_api import api_request
+
+from backend.db.queries.queue import deleteFromQueue
+
+from datetime import datetime, timezone
+
 # Load sensitive variables
 load_dotenv()
 GITHUB_TOKEN = os.getenv("PAT")
@@ -19,14 +25,7 @@ API_KEY = os.getenv("API_KEY")
 # File for query logic that will be used/imported into the scraper
 def createUser(username, db):
 
-    try:
-        user = getUserData(username)
-    except FileNotFoundError as e:
-        print(e)
-        deleteUser(username, db)
-        return None
-    if user is None:
-        return None
+    user = getUserData(username, db)
 
     with db.cursor() as cur:
         cur.execute(
@@ -75,11 +74,20 @@ def createUser(username, db):
                 user.is_enriched,
             ),
         )
+        # Get the user id
+        cur.execute(
+            """
+            SELECT id FROM users WHERE username = %s;
+            """,
+            (user.username,),
+        )
+        user_id = cur.fetchone()[0]
+
         db.commit()
         cur.close()
         print(f"Created user: {user.username}")
     # Returns the user object to the worker
-    return user
+    return user, user_id
 
 
 # Batch create minimum users for sponsorship relations
@@ -101,18 +109,12 @@ def batchCreateUser(usernames, db):
     return
 
 
-def getUserData(username):
+def getUserData(username, db):
     # Call Github REST API to get the metadata for user
     url = f"https://api.github.com/users/{username}"
-    headers = {
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github+json",
-    }
 
-    response = requests.get(url=url, headers=headers)
-
-    if response.status_code == 200:
-        data = response.json()
+    try:
+        data, _ = api_request(url)  # <-- unpack both
         user = UserModel.from_api(data)
 
         if user.location != None:
@@ -123,20 +125,19 @@ def getUserData(username):
             # If user does not have pronouns, infer gender based on name and country
             if not user.has_pronouns:
                 user.gender = getGender(user.name, user.location)
-
-        user.is_enriched = True
-        print(user)
-        return user
+            user.is_enriched = True
+            print(user)
+            return user
     # User in DB does not match user in Github (this means the user has changed their username) remove the user & cascade
-    if response.status_code == 404:
-        raise FileNotFoundError(
-            f"GitHub user '{username}' not found (404). Delete this user from the database."
-        )
-    else:
-        print(
-            f"Failed to fetch GitHub profile for {username}: {response.status_code} {response.text}"
-        )
-        return None
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            deleteUser(username, db)
+            deleteFromQueue(username, db)
+        else:
+            print(
+                f"Failed to fetch GitHub profile for {username}: {e.response.status_code} {e.response.text}"
+            )
+            return None
 
 
 # Take the location of the github user, use openstreetmap API to pull the country of origin
@@ -146,13 +147,13 @@ def getLocation(location):
         "User-Agent": f"github-sponsor-dashboard/1.0 ({EMAIL})",
         "Accept-Language": "en",
     }
-    response = requests.get(url=url, headers=headers)
-    if response.status_code == 200:
-        data = response.json()
+    res = requests.get(url=url, headers=headers)
+    if res.status_code == 200:
+        data = res.json()
         country = data[0]["address"]["country"]
         return country
     else:
-        print("Request failed:", response.status_code, response.text)
+        print("Request failed:", res.status_code, res.text)
         return None
 
 
@@ -188,7 +189,6 @@ def scrapePronouns(name):
             gender = None
             has_pronouns = False
 
-        print(has_pronouns, gender)
         browser.close()
         return has_pronouns, gender
 
@@ -201,7 +201,7 @@ def getGender(name, country):
     if country is not None:
         user_message += f", current location: {country}"
 
-    response = client.chat.completions.create(
+    res = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {
@@ -216,7 +216,7 @@ def getGender(name, country):
             },
         ],
     )
-    output = response.choices[0].message.content
+    output = res.choices[0].message.content
     user = json.loads(output)
     gender = user["gender"]
     return gender
@@ -229,9 +229,9 @@ def findUser(username, db):
         row = cur.fetchone()
         cur.close()
         if row:
-            return True, row[0]
+            return True
         else:
-            return False, None
+            return False
 
 
 # Returns an array of user id's mapped to the specific usernames
@@ -253,14 +253,7 @@ def batchGetUserId(user_arr, db):
 # User already exists from previous sponsorship relation, run Github API request, collect and update user data
 def enrichUser(username, db):
 
-    try:
-        user = getUserData(username)
-    except FileNotFoundError as e:
-        print(e)
-        deleteUser(username, db)
-        return None
-    if user is None:
-        return None
+    user = getUserData(username, db)
 
     with db.cursor() as cur:
         cur.execute(
@@ -306,14 +299,23 @@ def enrichUser(username, db):
                 user.username,
             ),
         )
+        # Get the user id
+        cur.execute(
+            """
+            SELECT id FROM users WHERE username = %s;
+            """,
+            (user.username,),
+        )
+        user_id = cur.fetchone()[0]
+
         db.commit()
         cur.close()
         print(f"Enriched user: {user.username}")
     # Returns the type of the user after getting metadata for scraping
-    return user
+    return user, user_id
 
 
-# Deletes a specfic user
+# Deletes a specfic user from the DB
 def deleteUser(user, db):
     with db.cursor() as cur:
         cur.execute(
@@ -327,3 +329,45 @@ def deleteUser(user, db):
         cur.close()
         print(f"Deleted {user}")
         return
+
+
+# Update final remaining data attributes at the end of worker
+def finalizeUserScrape(username, private_count, db):
+    updateScraped(username, db)
+    updatePrivate(username, private_count, db)
+
+
+# Update last_scraped for the passed in user in the DB
+def updateScraped(username, db):
+
+    scraped = datetime.now(timezone.utc)
+
+    with db.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE users SET
+                last_scraped = %s            
+            WHERE username = %s;
+            """,
+            (scraped, username),
+        )
+        db.commit()
+        cur.close()
+    return
+
+
+# Update the private_sponsor_count for the passed in user in the DB
+def updatePrivate(username, private_count, db):
+
+    with db.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE users SET
+                private_sponsor_count = %s            
+            WHERE username = %s;
+            """,
+            (private_count, username),
+        )
+        db.commit()
+        cur.close()
+    return
