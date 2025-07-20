@@ -66,6 +66,7 @@ def updateStatus(user, status, db):
         return
 
 
+# Attempt to add a single username to the queue, check if the user is a real github user, and does not already exist
 def addToQueue(username, db):
     url = f"https://api.github.com/users/{username}"
     headers = {
@@ -82,10 +83,22 @@ def addToQueue(username, db):
 
     # Add user to queue with depth 1 (user is a new root)
     with db.cursor() as cur:
+        # Check if username already exists in the queue
+        cur.execute(
+            """
+            SELECT 1 FROM queue WHERE username = %s
+            """,
+            (username,),
+        )
+        if cur.fetchone():
+            db.commit()
+            cur.close()
+            return {"success": False, "error": "User already in queue"}, 409
+
+        # Insert user into queue
         cur.execute(
             """
             INSERT INTO queue (username, depth, status) VALUES (%s, %s, %s)
-            ON CONFLICT (username) DO NOTHING
             """,
             (username, 1, "pending"),
         )
@@ -94,6 +107,7 @@ def addToQueue(username, db):
         return {"success": True}, 200
 
 
+# Delete a user from the queue
 def deleteFromQueue(username, db):
     with db.cursor() as cur:
         cur.execute(
@@ -107,3 +121,21 @@ def deleteFromQueue(username, db):
         cur.close()
         print(f"Deleted {username} from queue")
         return
+
+
+# Update status of users to "pending" to crawl again if they exceed days_old created at time
+# Resets the created_at time to current time, enqueing them for scraping again (after current queue)
+def enqueueStaleUsers(db, days_old):
+    with db.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE queue
+            SET status = 'pending', created_at = NOW()
+            FROM users
+            WHERE queue.username = users.username
+            AND queue.status = 'completed'
+            AND users.last_scraped < NOW() - INTERVAL '%s days'
+            """,
+            (days_old,),
+        )
+        db.commit()
