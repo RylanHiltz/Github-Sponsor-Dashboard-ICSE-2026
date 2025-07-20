@@ -78,10 +78,10 @@ def scrape_sponsors(username):
         if sponsor_count:
             private_sponsors = sponsor_count - len(sponsors_list)
 
-        print("Number of sponsors: ", len(sponsors_list) + private_sponsors)
-        print("Private sponsors: ", private_sponsors)
-        print("User sponsors: ", len(user_sponsors))
-        print("Org sponsors: ", len(org_sponsors))
+        print("# of Total Sponsors: ", len(sponsors_list) + private_sponsors)
+        print("# of Private Sponsors: ", private_sponsors)
+        print("User Sponsors: ", len(user_sponsors))
+        print("Org Sponsors: ", len(org_sponsors))
         return sponsors_list, private_sponsors
 
 
@@ -89,20 +89,20 @@ def scrape_sponsors(username):
 def scrape_sponsoring(name, type):
 
     if type == "User":
-        sponsoring_arr = user_sponsoring(username=name)
+        sponsoring_list = user_sponsoring(username=name)
     elif type == "Organization":
-        sponsoring_arr = org_sponsoring(org_name=name)
+        sponsoring_list = org_sponsoring(org_name=name)
     else:
         print(f"Unknown type: {type}")
-        sponsoring_arr = []
+        sponsoring_list = []
 
-    return sponsoring_arr
+    return sponsoring_list
 
 
 # Scrapes the sponsoring page of the passed in user
 def user_sponsoring(username):
 
-    sponsoring_arr = list()
+    sponsoring_list = list()
 
     with sync_playwright() as p:
 
@@ -115,36 +115,55 @@ def user_sponsoring(username):
         sponsoring_section = page.query_selector("div.col-lg-12")
 
         if sponsoring_section:
-            rows = sponsoring_section.query_selector_all("div.color-border-muted")
-            for row in rows:
-                past_sponsor = row.query_selector("span.Label--secondary") is not None
-                if not past_sponsor:
 
-                    # Avater and user Link are the same component, inner_div handles duplicate
-                    inner_div = row.query_selector("div.d-table-cell")
-                    if inner_div:
-                        user_links = inner_div.query_selector_all(
-                            "a[data-hovercard-type='user']"
-                        )
-                        org_links = inner_div.query_selector_all(
-                            "a[data-hovercard-type='organization']"
-                        )
-                        # Collect sponsored users
-                        for sponsored in user_links:
-                            href = sponsored.get_attribute("href")
-                            if href:
-                                sponsored_name = href.strip("/").split("/")[-1]
-                                sponsoring_arr.append(sponsored_name)
+            button = sponsoring_section.query_selector("a[class='next_page']")
 
-                        # Collect sponsored organizations
-                        for sponsored in org_links:
-                            href = sponsored.get_attribute("href")
-                            if href:
-                                sponsored_name = href.strip("/").split("/")[-1]
-                                sponsoring_arr.append(sponsored_name)
+            while True:
+                rows = sponsoring_section.query_selector_all("div.color-border-muted")
+                for row in rows:
+                    past_sponsor = (
+                        row.query_selector("span.Label--secondary") is not None
+                    )
+                    if not past_sponsor:
+                        # Avater and user Link are the same component, inner_div handles duplicate
+                        inner_div = row.query_selector("div.d-table-cell")
+                        if inner_div:
+                            user_links = inner_div.query_selector_all(
+                                "a[data-hovercard-type='user']"
+                            )
+                            org_links = inner_div.query_selector_all(
+                                "a[data-hovercard-type='organization']"
+                            )
+
+                            # Collect sponsored users
+                            for sponsored in user_links:
+                                href = sponsored.get_attribute("href")
+                                if href:
+                                    sponsored_name = href.strip("/").split("/")[-1]
+                                    sponsoring_list.append(sponsored_name)
+
+                            # Collect sponsored organizations
+                            for sponsored in org_links:
+                                href = sponsored.get_attribute("href")
+                                if href:
+                                    sponsored_name = href.strip("/").split("/")[-1]
+                                    sponsoring_list.append(sponsored_name)
+
+                # After clicking next, re-query sponsoring_section and button
+                button = sponsoring_section.query_selector("a[class='next_page']")
+
+                # if the pagination button exists and is enabled, click and continue crawling
+                if button and button.is_visible() and button.is_enabled():
+                    button.click()
+                    page.wait_for_timeout(750)
+                    # Update sponsoring section to load new user data
+                    sponsoring_section = page.query_selector("div.col-lg-12")
+                else:
+                    break
+        print(len(sponsoring_list), "Accounts Sponsored, Crosscheck Link: ", url)
 
         browser.close()
-        return sponsoring_arr
+        return sponsoring_list
 
 
 # Scrapes the sponsoring page of the organization
@@ -180,16 +199,12 @@ def org_sponsoring(org_name):
                 # Check if this is still active ("data-has-page" is true)
                 if next_button.get_attribute("data-has-page") == "true":
                     next_button.click()
-                    page.wait_for_timeout(150)
+                    page.wait_for_timeout(300)
                 else:
                     break
             else:
                 break
 
         browser.close()
-        print(sponsoring_list)
-        print(len(sponsoring_list))
+        print(len(sponsoring_list), "Accounts Sponsored, Crosscheck Link: ", url)
     return sponsoring_list
-
-
-org_sponsoring("syntaxfm")
