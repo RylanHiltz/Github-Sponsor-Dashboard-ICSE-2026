@@ -2,7 +2,12 @@ import time
 from backend.utils.db_conn import db_connection
 
 # DB Queries
-from backend.db.queries.queue import getFirstInQueue, batchAddQueue, updateStatus
+from backend.db.queries.queue import (
+    getFirstInQueue,
+    batchAddQueue,
+    updateStatus,
+    enqueueStaleUsers,
+)
 from backend.db.queries.users import (
     createUser,
     enrichUser,
@@ -13,7 +18,12 @@ from backend.db.queries.users import (
     getUserData,
     finalizeUserScrape,
 )
-from backend.db.queries.sponsors import createSponsoring, createSponsors
+from backend.db.queries.sponsors import (
+    createSponsoring,
+    createSponsors,
+    syncSponsors,
+    syncSponsorships,
+)
 from backend.db.queries.user_activity import getUserActivity
 
 # Scraper
@@ -27,12 +37,18 @@ import time
 MAX_DEPTH = 4
 
 
+# ! DELETE ALL OF THE USERS, THIS DATA WAS WRONG CAUSE OF THE SPONSORING SCRAPER LOGIC NOT PAGINATING NDOIJEWHFDB KLWJEFBGEK
+
+
 class ScraperWorker:
     def run(self):
 
         # Establish database connection
         conn = db_connection()
         print("Worker has been started")
+
+        # Start rescraping timer
+        last_stale_check = time.time()
 
         while True:
             start = time.time()
@@ -41,6 +57,14 @@ class ScraperWorker:
             # If auth is close to expiration
             if check_auth is True:
                 get_auth()
+
+            # Check last_stale_check every 4 hours
+            if time.time() - last_stale_check >= 14400:
+                # Re-scrape users every 2 weeks
+                enqueueStaleUsers(conn, days_old=28)
+                last_stale_check = time.time()
+                # Re-establish DB connection every 4 hours
+                conn = db_connection()
 
             #  Fetch first user from queue
             data = getFirstInQueue(db=conn)
@@ -51,9 +75,9 @@ class ScraperWorker:
             username = data["username"]
             depth = data["depth"]
 
-            # If the users depth exceeds MAX_DEPTH to crawl, skip the use
+            # If the users depth exceeds MAX_DEPTH to crawl, skip the user and continue to next in queue
             if depth > MAX_DEPTH:
-                updateStatus("username", "skipped")
+                updateStatus(username, "skipped")
                 continue
 
             # Check if the user exists
@@ -72,30 +96,21 @@ class ScraperWorker:
             #  Crawl the user for sponsorship relations (bi-directional)
             sponsors, private_sponsor_count = scrape_sponsors(username)
             sponsoring = scrape_sponsoring(username, user.type)
-            print("sponsors: ", sponsors)
-            print("sponsoring: ", sponsoring)
-
-            unique_users = list(set(sponsors) | set(sponsoring))
 
             # Add users and organizations to the users table & queue (name and is_enriched defaults to FALSE)
-            # Increment the depth by 1? (still need to figure out this logic)
-            if unique_users:
-                batchAddQueue(unique_users, depth=(depth + 1), db=conn)
-                batchCreateUser(unique_users, db=conn)
-
-            # If the user has sponsors, create the relations in the DB
             if sponsors:
-                sponsor_ids = batchGetUserId(sponsors, conn)
-                print(sponsor_ids)
-                createSponsors(user_id, sponsor_arr=sponsor_ids, db=conn)
-            # If the user is sponsoring users, create the relations in the DB
+                batchAddQueue(sponsors, depth=(depth + 1), db=conn)
+                batchCreateUser(sponsors, db=conn)
+                syncSponsors(user_id, sponsors, conn)
             if sponsoring:
-                sponsoring_ids = batchGetUserId(sponsoring, conn)
-                print(sponsoring_ids)
-                createSponsoring(user_id, sponsored_arr=sponsoring_ids, db=conn)
+                batchAddQueue(sponsoring, depth=(depth + 1), db=conn)
+                batchCreateUser(sponsoring, db=conn)
+                syncSponsorships(user_id, sponsoring, conn)
 
             # Collect the user activity from the Github API (potentially a lot of API requests)
-            getUserActivity(user=username, user_id=user_id, db=conn)
+            getUserActivity(
+                user=username, user_id=user_id, user_type=user.type, db=conn
+            )
 
             # Update staus of the crawled user
             updateStatus(user=username, status="completed", db=conn)
@@ -107,9 +122,8 @@ class ScraperWorker:
             end = time.time()
             elapsed = end - start
             print(f"user {username} crawled: {elapsed:.4f} seconds elapsed")
-            break
 
-            time.sleep(2)  # Wait before checking queue again
+            time.sleep(3)  # Wait before checking queue again
 
 
 if __name__ == "__main__":
