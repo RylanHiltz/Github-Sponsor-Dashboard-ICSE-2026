@@ -21,6 +21,7 @@ class UserModel:
     public_repos: int
     public_gists: int
     twitter_username: Optional[str]
+    email: Optional[str]
     private_sponsor_count: int
     last_scraped: Optional[datetime]
     is_enriched: Optional[bool]
@@ -44,6 +45,7 @@ class UserModel:
             public_repos=data["public_repos"],
             public_gists=data["public_gists"],
             twitter_username=data.get("twitter_username"),
+            email=data.get("email"),
             private_sponsor_count=0,
             last_scraped=None,
             is_enriched=None,

@@ -20,9 +20,12 @@ def api_request(url):
         if res.status_code == 200:
             return res.json(), res.headers
         elif res.status_code == 403:
+            if "Repository access blocked" in res.text:
+                print(f"Skipping blocked repository: {url}")
+                return [], {}  # Return empty data so scraper can continue
             remaining = res.headers.get("X-RateLimit-Remaining")
             reset = res.headers.get("X-RateLimit-Reset")
-            # If API request is 0
+            # If API request tokens remaining hits 0
             if remaining == "0" and reset:
                 reset_time = int(reset)
                 now = int(time.time())
@@ -32,5 +35,8 @@ def api_request(url):
                 continue
             else:
                 raise Exception(f"403 Forbidden, not due to rate limit: {res.text}")
+        elif res.status_code == 451:
+            print(f"[451 Legal Block] Skipping: {url}")
+            return [], {}
         else:
             res.raise_for_status()

@@ -25,22 +25,7 @@ def scrape_sponsors(username):
             # These should all be null/empty
             return [], 0
 
-        while True:
-            show_more_clicked = False
-            forms = page.query_selector_all(
-                f'form[action^="/sponsors/{username}/sponsors_partial?filter=active"]'
-            )
-            # Only click the first visible form's button
-            for form in forms:
-                if form.is_visible():
-                    button = form.query_selector('button[type="submit"]')
-                    if button and button.is_visible():
-                        button.click()
-                        show_more_clicked = True
-                        page.wait_for_timeout(150)
-                        break  # Only click one button per loop
-            if not show_more_clicked:
-                break
+        sponsor_div = page.query_selector("#sponsors")
 
         # Get total sponsor count for user
         counter_span = page.query_selector("span.Counter")
@@ -49,9 +34,23 @@ def scrape_sponsors(username):
         else:
             print("Sponsor count span not found.")
 
-        sponsor_div = page.query_selector("#sponsors")
-
         if sponsor_div:
+            form = sponsor_div.query_selector(
+                "form[data-target='remote-pagination.form']"
+            )
+            if form.is_visible():
+                button = form.query_selector(
+                    'button[data-target="remote-pagination.submitButton"]'
+                )
+                while True:
+                    if button.is_visible() and button.is_enabled():
+                        button.click()
+                        print("clicked")
+                        page.wait_for_timeout(300)  # wait for sponsors to load
+                    else:
+                        # Log if no button was clickable
+                        print(f"No clickable 'Show more' button found for {username}.")
+                        break
             user_links = sponsor_div.query_selector_all("a[data-hovercard-type='user']")
             org_links = sponsor_div.query_selector_all(
                 "a[data-hovercard-type='organization']"
@@ -150,29 +149,47 @@ def user_sponsoring(username):
 
 # Scrapes the sponsoring page of the organization
 def org_sponsoring(org_name):
-
-    sponsoring_list = list()
+    sponsoring_list = []
 
     with sync_playwright() as p:
-
         browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+        context = browser.new_context(storage_state="auth.json")
+        page = context.new_page()
 
         url = f"https://github.com/orgs/{org_name}/sponsoring"
         page.goto(url)
+        time.sleep(1)
 
-        table_body = page.query_selector("tbody.TableBody")
-        if table_body:
-            rows = table_body.query_selector_all("tr.TableRow")
-            for row in rows:
-                link = row.query_selector("a.prc-Link-Link-85e08")
-                if link:
-                    avatar_img = link.query_selector("img[data-component='Avatar']")
-                    if avatar_img:
-                        is_org = avatar_img.get_attribute("data-square") is not None
+        while True:
+            # Find the table of sponsors on the current page
+            table_body = page.query_selector("tbody.TableBody")
+            if table_body:
+                rows = table_body.query_selector_all("tr.TableRow")
+                for row in rows:
+                    link = row.query_selector("a.prc-Link-Link-85e08")
+                    if link:
                         href = link.get_attribute("href")
                         if href:
                             user = href.strip("/").split("/")[-1]
                             sponsoring_list.append(user)
+
+            # Find pagination buttons
+            buttons = page.query_selector_all("button.TablePaginationAction")
+            if buttons:
+                next_button = buttons[-1]
+                # Check if this is still active ("data-has-page" is true)
+                if next_button.get_attribute("data-has-page") == "true":
+                    next_button.click()
+                    page.wait_for_timeout(150)
+                else:
+                    break
+            else:
+                break
+
         browser.close()
-        return sponsoring_list
+        print(sponsoring_list)
+        print(len(sponsoring_list))
+    return sponsoring_list
+
+
+org_sponsoring("syntaxfm")

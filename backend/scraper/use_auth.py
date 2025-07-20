@@ -2,6 +2,12 @@ from playwright.sync_api import sync_playwright
 import os
 import time
 import json
+from dotenv import load_dotenv
+
+# Load login credentials for github auth while scraping
+load_dotenv()
+USERNAME = os.getenv("gh_username")
+PASSWORD = os.getenv("gh_password")
 
 
 def is_auth_expiring_soon(auth_path="auth.json", hours=24):
@@ -47,13 +53,15 @@ def get_auth(auth_path="auth.json"):
     if not is_auth_valid(auth_path):
         print("Auth needs to be recreated.")
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
+            browser = p.chromium.launch(headless=True)
             context = browser.new_context()
             page = context.new_page()
             page.goto("https://github.com/login")
-            input(
-                "Please log in to GitHub in the browser window, then press Enter here..."
-            )
+
+            page.locator('input[name="login"]').fill(USERNAME)
+            page.locator('input[name="password"]').fill(PASSWORD)
+            page.locator('input[type="submit"]').click()
+
             context.storage_state(path=auth_path)
             browser.close()
         print("Auth recreated and saved.")

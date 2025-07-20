@@ -11,9 +11,9 @@ GITHUB_TOKEN = os.getenv("PAT")
 
 
 # Return the user activity for the passed in user (PR, commits, issues)
-def getUserActivity(user, user_id, db):
+def getUserActivity(user, user_id, user_type, db):
 
-    commit_count = getUserRepos(user)
+    commit_count = getUserRepos(user, user_type)
     pr_count = getPRCount(user)
     issues_count = getIssuesCount(user)
 
@@ -47,9 +47,13 @@ def getUserActivity(user, user_id, db):
 
 
 # Returns a list of public repos belonging to the passed in user
-def getUserRepos(username):
+def getUserRepos(username, user_type):
     page = 1
     all_repos = []
+
+    # If the user is an Organization, no commits to repos can be made
+    if user_type == "Organization":
+        return 0
 
     while True:
         url = f"https://api.github.com/users/{username}/repos?per_page=100&page={page}"
@@ -65,8 +69,11 @@ def getUserRepos(username):
         if len(data) < 100:
             break
         page += 1
-    commits = getCommitCount(username=username, repos=all_repos)
-    return commits
+    # If repos exist, get the commit count, else return 0
+    if all_repos:
+        commits = getCommitCount(username=username, repos=all_repos)
+        return commits
+    return 0
 
 
 # For the passed in repository, return the number of public commits belonging to the user
@@ -103,12 +110,10 @@ def getCommitCount(username, repos):
                     last_link = url
                     count = int(last_link.split("&page=")[-1])
                     commit_count += count
-        print("searched repos:", searched)
-        print("total count:", commit_count)
-    print(
-        f"All {searched} repos scraped: remaining github:",
-        headers.get("X-RateLimit-Remaining"),
-    )
+    print(f"All {searched} repos scraped")
+    if headers:
+        print("Remaning GitHub Tokens:", headers.get("X-RateLimit-Remaining"))
+
     return commit_count
 
 

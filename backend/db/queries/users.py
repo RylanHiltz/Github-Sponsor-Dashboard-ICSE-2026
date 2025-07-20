@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 import requests
 import json
+import re
 from openai import OpenAI
 
 # Scraper imports
@@ -47,10 +48,11 @@ def createUser(username, db):
                 public_repos,
                 public_gists,
                 twitter_username,
+                email,
                 last_scraped,
                 is_enriched
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (username) DO NOTHING;
             """,
             (
@@ -70,6 +72,7 @@ def createUser(username, db):
                 user.public_repos,
                 user.public_gists,
                 user.twitter_username,
+                user.email,
                 user.last_scraped,
                 user.is_enriched,
             ),
@@ -120,11 +123,17 @@ def getUserData(username, db):
         if user.location != None:
             user.location = getLocation(user.location)
 
+        # If user type is User
         if user.type == "User":
             user.has_pronouns, user.gender = scrapePronouns(user.username)
             # If user does not have pronouns, infer gender based on name and country
             if not user.has_pronouns:
                 user.gender = getGender(user.name, user.location)
+            user.is_enriched = True
+            print(user)
+            return user
+        # Else user type is Organization
+        else:
             user.is_enriched = True
             print(user)
             return user
@@ -140,8 +149,26 @@ def getUserData(username, db):
             return None
 
 
+def clean_location(location):
+    patterns_to_remove = [
+        r"greater\s+",
+        r"area",
+        r"metro",
+        r"vicinity",
+        r"region",
+        r"\bthe\b",
+    ]
+    location = location.lower()
+    for pattern in patterns_to_remove:
+        location = re.sub(pattern, "", location)
+    # Remove extra spaces, commas
+    location = re.sub(r"\s+", " ", location).strip(" ,")
+    return location.title()
+
+
 # Take the location of the github user, use openstreetmap API to pull the country of origin
 def getLocation(location):
+    location = clean_location(location)
     url = f"https://nominatim.openstreetmap.org/search?q={location}&format=json&addressdetails=1"
     headers = {
         "User-Agent": f"github-sponsor-dashboard/1.0 ({EMAIL})",
@@ -150,8 +177,12 @@ def getLocation(location):
     res = requests.get(url=url, headers=headers)
     if res.status_code == 200:
         data = res.json()
-        country = data[0]["address"]["country"]
-        return country
+        if data and "address" in data[0] and "country" in data[0]["address"]:
+            country = data[0]["address"]["country"]
+            return country
+        else:
+            print(f"No location data found for '{location}'.")
+            return None
     else:
         print("Request failed:", res.status_code, res.text)
         return None
@@ -174,23 +205,30 @@ def scrapePronouns(name):
         pronoun_span = page.query_selector("span[itemprop='pronouns']")
         if pronoun_span:
             pronouns = pronoun_span.inner_text()
-            if pronouns:
-                pronouns_list = [p.strip() for p in pronouns.split("/")]
-                has_pronouns = True
-                if any(p.lower() in ["he", "him"] for p in pronouns_list):
-                    gender = "Male"
-                elif any(p.lower() in ["she", "her"] for p in pronouns_list):
-                    gender = "Female"
-                elif any(p.lower() in ["they", "them"] for p in pronouns_list):
-                    gender = "Other"
-                else:
-                    gender = "Unknown"
+            has_pronouns, gender = extract_pronouns(pronouns)
         else:
-            gender = None
-            has_pronouns = False
+            has_pronouns, gender = False, None
 
         browser.close()
         return has_pronouns, gender
+
+
+def extract_pronouns(text):
+    # Normalize casing
+    text = text.lower()
+
+    # Regex pattern to catch common pronouns, regardless of surrounding text
+    pronoun_patterns = [r"\bhe/?him\b", r"\bshe/?her\b", r"\bthey/?them\b"]
+
+    for pattern in pronoun_patterns:
+        if re.search(pattern, text):
+            if "he" in pattern:
+                return True, "Male"
+            elif "she" in pattern:
+                return True, "Female"
+            elif "they" in pattern:
+                return True, "Other"
+    return False, None
 
 
 # Infer the gender of the username using the full name and current country (assuming place of origin for some users)
@@ -274,6 +312,7 @@ def enrichUser(username, db):
                 public_repos = %s,
                 public_gists = %s,
                 twitter_username = %s,
+                email = %s,
                 last_scraped = %s,
                 is_enriched = %s
             WHERE username = %s
@@ -294,6 +333,7 @@ def enrichUser(username, db):
                 user.public_repos,
                 user.public_gists,
                 user.twitter_username,
+                user.email,
                 user.last_scraped,
                 user.is_enriched,
                 user.username,
