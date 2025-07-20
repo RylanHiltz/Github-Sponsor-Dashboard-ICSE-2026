@@ -9,8 +9,12 @@ load_dotenv()
 USERNAME = os.getenv("gh_username")
 PASSWORD = os.getenv("gh_password")
 
+# File pathname of authentication file
+AUTH_PATH = "auth.json"
 
-def is_auth_expiring_soon(auth_path="auth.json", hours=24):
+
+# Checks if the auth file exists, returns True (expiring soon), or time remaining
+def is_auth_expiring_soon(auth_path=AUTH_PATH):
 
     print(f"Checking if auth is expiring soon for: {auth_path}")
     if not os.path.exists(auth_path):
@@ -29,12 +33,13 @@ def is_auth_expiring_soon(auth_path="auth.json", hours=24):
     soonest_expiry = min(expiries)
     expires_in = soonest_expiry - time.time()
     print(f"Soonest expiry: {soonest_expiry} (in {expires_in/3600:.2f} hours)")
-    is_expiring = expires_in < hours * 3600
-    print(f"Is expiring within {hours} hours? {is_expiring}")
-    return is_expiring
+    time_remaining = expires_in < 24 * 3600
+    print(f"Is expiring within 24 hours? {time_remaining}")
+    return time_remaining
 
 
-def is_auth_valid(auth_path="auth.json"):
+# Checks if user authentication already exists in browser
+def check_auth(auth_path=AUTH_PATH):
     if not os.path.exists(auth_path):
         return False
     with sync_playwright() as p:
@@ -48,9 +53,10 @@ def is_auth_valid(auth_path="auth.json"):
         return logged_in
 
 
-def get_auth(auth_path="auth.json"):
-
-    if not is_auth_valid(auth_path):
+# Headlessy logs into github using venv account details
+def get_auth(auth_path=AUTH_PATH):
+    # If Github authentication has expired or doesnt exist
+    if check_auth(auth_path) is False:
         print("Auth needs to be recreated.")
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -58,12 +64,15 @@ def get_auth(auth_path="auth.json"):
             page = context.new_page()
             page.goto("https://github.com/login")
 
+            # Fill in loging info and submit
             page.locator('input[name="login"]').fill(USERNAME)
             page.locator('input[name="password"]').fill(PASSWORD)
             page.locator('input[type="submit"]').click()
 
+            # Store authentication cookies in auth.json
             context.storage_state(path=auth_path)
             browser.close()
         print("Auth recreated and saved.")
+    # Github authentication file is valid/does not need to be created
     else:
         print("Auth is valid.")

@@ -98,6 +98,7 @@ def getCommitCount(username, repos):
                 raise  # re-raise other errors
         link_header = headers.get("link")
 
+        # Increment searched repo count by 1
         searched += 1
 
         if link_header is None:
