@@ -149,6 +149,7 @@ def getUserData(username, db):
             return None
 
 
+# Attempts to remove words that may confuse the location API to pull country of origin for user
 def clean_location(location):
     patterns_to_remove = [
         r"greater\s+",
@@ -163,6 +164,7 @@ def clean_location(location):
         location = re.sub(pattern, "", location)
     # Remove extra spaces, commas
     location = re.sub(r"\s+", " ", location).strip(" ,")
+    print("Cleaned location for API:", location.title())
     return location.title()
 
 
@@ -213,6 +215,7 @@ def scrapePronouns(name):
         return has_pronouns, gender
 
 
+# Extracts the pronouns out of the pronoun span (users may have random words and pronouns mixed)
 def extract_pronouns(text):
     # Normalize casing
     text = text.lower()
@@ -222,11 +225,16 @@ def extract_pronouns(text):
 
     for pattern in pronoun_patterns:
         if re.search(pattern, text):
-            if "he" in pattern:
+            # Attempt to catch mixed pronouns, return gender Other if so
+            if ("he" in pattern and "her" in pattern) or (
+                "she" in pattern and "him" in pattern
+            ):
+                return True, "Other"
+            if "he" in pattern or "him" in pattern:
                 return True, "Male"
-            elif "she" in pattern:
+            elif "she" in pattern or "her" in pattern:
                 return True, "Female"
-            elif "they" in pattern:
+            elif "they" in pattern or "them" in pattern:
                 return True, "Other"
     return False, None
 

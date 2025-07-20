@@ -6,7 +6,6 @@ create table public.users (
   username text null,
   name text null,
   type text null,
-  has_pronouns boolean null,
   gender public.gender null,
   location text null,
   avatar_url text null,
@@ -22,7 +21,9 @@ create table public.users (
   created_at timestamp with time zone not null default now(),
   last_scraped timestamp with time zone null,
   is_enriched boolean not null default false,
+  has_pronouns boolean null,
   private_sponsor_count bigint null,
+  email text null,
   constraint users_pkey primary key (id),
   constraint users_username_key unique (username)
 ) TABLESPACE pg_default;
@@ -35,6 +36,7 @@ create table public.user_activity (
   pr_count bigint null,
   issues_count bigint null,
   code_review_count bigint null,
+  created_at timestamp with time zone null default now(),
   constraint user_activity_pkey primary key (id),
   constraint user_activity_user_id_key unique (user_id),
   constraint user_activity_user_id_fkey foreign KEY (user_id) references users (id) on update CASCADE on delete CASCADE
