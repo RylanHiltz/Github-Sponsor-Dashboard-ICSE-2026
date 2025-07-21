@@ -4,10 +4,13 @@
 
 # ignore virtual environment 
 venv
-
 __pycache__/
 
 rootusers.txt
 
 # ignore github browser authentication file
 auth.json
+
+# Log file of for scraper debugging
+scraper.log
+

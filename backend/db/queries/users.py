@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 import os
 import requests
 import json
-import re
 from openai import OpenAI
 
 # Scraper imports
@@ -15,6 +14,8 @@ from backend.utils.github_api import api_request
 from backend.db.queries.queue import deleteFromQueue
 
 from datetime import datetime, timezone
+import logging
+import re
 
 # Load sensitive variables
 load_dotenv()
@@ -32,6 +33,7 @@ def createUser(username, db):
         cur.execute(
             """
             INSERT INTO users (
+                github_id,
                 username,
                 name,
                 type,
@@ -52,10 +54,11 @@ def createUser(username, db):
                 last_scraped,
                 is_enriched
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (username) DO NOTHING;
             """,
             (
+                user.github_id,
                 user.username,
                 user.name,
                 user.type,
@@ -140,10 +143,13 @@ def getUserData(username, db):
     # User in DB does not match user in Github (this means the user has changed their username) remove the user & cascade
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:
+            logging.error(
+                f"{username} has changed usernames or no longer exists on github, Nuke user from DB."
+            )
             deleteUser(username, db)
             deleteFromQueue(username, db)
         else:
-            print(
+            logging.error(
                 f"Failed to fetch GitHub profile for {username}: {e.response.status_code} {e.response.text}"
             )
             return None
@@ -168,6 +174,14 @@ def clean_location(location):
     return location.title()
 
 
+def get_most_important_location(locations):
+    if not locations:
+        return None
+    best = max(locations, key=lambda x: x.get("importance", 0))
+    address = best.get("address", {})
+    return address.get("country")
+
+
 # Take the location of the github user, use openstreetmap API to pull the country of origin
 def getLocation(location):
     location = clean_location(location)
@@ -180,13 +194,13 @@ def getLocation(location):
     if res.status_code == 200:
         data = res.json()
         if data and "address" in data[0] and "country" in data[0]["address"]:
-            country = data[0]["address"]["country"]
+            country = get_most_important_location(data)
             return country
         else:
             print(f"No location data found for '{location}'.")
             return None
     else:
-        print("Request failed:", res.status_code, res.text)
+        logging.error(f"OpenStreetMap.Org Request failed:", res.status_code, res.text)
         return None
 
 
@@ -305,6 +319,7 @@ def enrichUser(username, db):
         cur.execute(
             """
             UPDATE users SET
+                github_id = %s,
                 name = %s,
                 type = %s,
                 has_pronouns = %s,
@@ -326,6 +341,7 @@ def enrichUser(username, db):
             WHERE username = %s
             """,
             (
+                user.github_id,
                 user.name,
                 user.type,
                 user.has_pronouns,
