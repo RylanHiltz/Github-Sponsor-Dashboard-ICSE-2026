@@ -1,4 +1,5 @@
 from backend.db.queries.users import batchGetUserId
+import logging
 
 # This module provides functions for managing sponsorship relationships between users in the database.
 
@@ -18,7 +19,6 @@ def createSponsors(sponsored, sponsor_arr, db):
         )
     db.commit()
     cur.close()
-    print("Created Sponsor Relationships")
     return
 
 
@@ -38,7 +38,6 @@ def createSponsoring(sponsor, sponsored_arr, db):
         )
     db.commit()
     cur.close()
-    print("Created Sponsoring Relationships")
     return
 
 
@@ -80,6 +79,7 @@ def syncSponsors(user_id, scraped_sponsors, db):
     if sponsors_to_add:
         sponsor_ids = batchGetUserId(list(sponsors_to_add), db)
         createSponsors(user_id, sponsor_arr=sponsor_ids, db=db)
+        logging.info(f"Created Sponsor Relations")
     return
 
 
@@ -121,4 +121,43 @@ def syncSponsorships(user_id, scraped_sponsoring, db):
     if sponsoring_to_add:
         sponsoring_ids = batchGetUserId(list(sponsoring_to_add), db)
         createSponsoring(user_id, sponsored_arr=sponsoring_ids, db=db)
+        logging.info(f"Created Sponsoring Relations")
+    return
+
+
+# Occurs if a user has 1 or many sponsor relations attached to previous users but Github returns
+# 404 error when user is being enriched. Check sponsor relations, grab sponsored ids, and add
+# 1 to each private_sponsor count, delete sponsor relations, and delete user from users and queue.
+def notFoundWithSponsors(username, db):
+    with db.cursor() as cur:
+
+        # Selects the sponsored IDs attachted to the not found user
+        cur.execute(
+            """
+            SELECT sponsored_id FROM sponsorship 
+            WHERE sponsor_id = (SELECT id FROM users WHERE username = %s);
+            """,
+            (username,),
+        )
+        rows = cur.fetchall()
+        ids = [row[0] for row in rows]
+        if ids:
+            # updates private sponsor count
+            cur.execute(
+                """
+                UPDATE users
+                SET private_sponsor_count = private_sponsor_count + 1
+                WHERE id = ANY(%s);
+                """,
+                (ids,),
+            )
+            # Delete sponsorships that belong to the user who is not found
+            cur.execute(
+                """
+                DELETE FROM sponsorship 
+                WHERE sponsor_id = (SELECT id FROM users WHERE username = %s);
+                """,
+                (username,),
+            )
+        db.commit()
     return

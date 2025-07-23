@@ -91,7 +91,8 @@ def createUser(username, db):
 
         db.commit()
         cur.close()
-        print(f"Created user: {user.username}")
+        # print(f"Created user: {user.username}")
+        logging.info(f"Created user: {user.username}")
     # Returns the user object to the worker
     return user, user_id
 
@@ -116,6 +117,8 @@ def batchCreateUser(usernames, db):
 
 
 def getUserData(username, db):
+    from backend.db.queries.sponsors import notFoundWithSponsors
+
     # Call Github REST API to get the metadata for user
     url = f"https://api.github.com/users/{username}"
 
@@ -146,8 +149,10 @@ def getUserData(username, db):
             logging.error(
                 f"{username} has changed usernames or no longer exists on github, Nuke user from DB."
             )
+            notFoundWithSponsors(username, db)
             deleteUser(username, db)
             deleteFromQueue(username, db)
+            raise ValueError(f"User {username} not found on GitHub.")
         else:
             logging.error(
                 f"Failed to fetch GitHub profile for {username}: {e.response.status_code} {e.response.text}"
@@ -170,7 +175,6 @@ def clean_location(location):
         location = re.sub(pattern, "", location)
     # Remove extra spaces, commas
     location = re.sub(r"\s+", " ", location).strip(" ,")
-    print("Cleaned location for API:", location.title())
     return location.title()
 
 
@@ -197,7 +201,8 @@ def getLocation(location):
             country = get_most_important_location(data)
             return country
         else:
-            print(f"No location data found for '{location}'.")
+            # print(f"No location data found for '{location}'.")
+            logging.warning(f"No location data found for '{location}'.")
             return None
     else:
         logging.error(f"OpenStreetMap.Org Request failed:", res.status_code, res.text)
@@ -235,7 +240,13 @@ def extract_pronouns(text):
     text = text.lower()
 
     # Regex pattern to catch common pronouns, regardless of surrounding text
-    pronoun_patterns = [r"\bhe/?him\b", r"\bshe/?her\b", r"\bthey/?them\b"]
+    pronoun_patterns = [
+        r"\bhe/?him\b",
+        r"\bhe/?they\b",
+        r"\bshe/?her\b",
+        r"\bshe/?they\b",
+        r"\bthey/?them\b",
+    ]
 
     for pattern in pronoun_patterns:
         if re.search(pattern, text):
@@ -244,9 +255,17 @@ def extract_pronouns(text):
                 "she" in pattern and "him" in pattern
             ):
                 return True, "Other"
-            if "he" in pattern or "him" in pattern:
+            if (
+                "he" in pattern
+                or "him" in pattern
+                or ("he" in pattern and "they" in pattern)
+            ):
                 return True, "Male"
-            elif "she" in pattern or "her" in pattern:
+            elif (
+                "she" in pattern
+                or "her" in pattern
+                or ("she" in pattern and "they" in pattern)
+            ):
                 return True, "Female"
             elif "they" in pattern or "them" in pattern:
                 return True, "Other"
@@ -283,15 +302,54 @@ def getGender(name, country):
 
 
 # Check if the passed in username exists in the DB
-def findUser(username, db):
+def findUser(username, db, return_user_obj=False):
     with db.cursor() as cur:
-        cur.execute("SELECT id FROM users WHERE username = %s LIMIT 1;", (username,))
+        cur.execute(
+            "SELECT id, is_enriched FROM users WHERE username = %s LIMIT 1;",
+            (username,),
+        )
         row = cur.fetchone()
-        cur.close()
         if row:
-            return True
+            user_id = row[0]
+            if return_user_obj:
+                # Fetch the full user object if needed
+                cur.execute(
+                    """
+                    SELECT
+                        github_id,
+                        username,
+                        name,
+                        type,
+                        has_pronouns,
+                        gender,
+                        location,
+                        avatar_url,
+                        profile_url,
+                        company,
+                        following,
+                        followers,
+                        hireable,
+                        bio,
+                        public_repos,
+                        public_gists,
+                        twitter_username,
+                        email,
+                        private_sponsor_count,
+                        last_scraped,
+                        is_enriched
+                    FROM users WHERE username = %s LIMIT 1;
+                    """,
+                    (username,),
+                )
+                row = cur.fetchone()
+                user = UserModel(*row)
+                print(user)
+                cur.close()
+                return user, user_id
+            return True, row[1]
         else:
-            return False
+            cur.close()
+            return False, None
 
 
 # Returns an array of user id's mapped to the specific usernames
@@ -374,7 +432,8 @@ def enrichUser(username, db):
 
         db.commit()
         cur.close()
-        print(f"Enriched user: {user.username}")
+        # print(f"Enriched user: {user.username}")
+        logging.info(f"Enriched user: {user.username}")
     # Returns the type of the user after getting metadata for scraping
     return user, user_id
 
@@ -387,11 +446,12 @@ def deleteUser(user, db):
             DELETE FROM users
             WHERE username = %s;
             """,
-            (user),
+            (user,),
         )
         db.commit()
         cur.close()
-        print(f"Deleted {user}")
+        # print(f"Deleted {user}")
+        logging.info(f"Deleted {user} From Database")
         return
 
 

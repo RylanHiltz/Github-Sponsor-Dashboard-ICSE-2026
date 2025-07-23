@@ -37,7 +37,7 @@ def getFirstInQueue(db):
         """
         SELECT username, depth FROM queue
         WHERE status = 'pending'
-        ORDER BY created_at ASC
+        ORDER BY created_at ASC, id ASC
         LIMIT 1;
         """
     )
@@ -62,7 +62,7 @@ def updateStatus(user, status, db):
         )
         db.commit()
         cur.close()
-        print(f"Updated user status {user}")
+        print(f"Updated user status {user}\n")
         return
 
 
@@ -115,7 +115,7 @@ def deleteFromQueue(username, db):
             DELETE FROM queue
             WHERE username = %s;
             """,
-            (username),
+            (username,),
         )
         db.commit()
         cur.close()

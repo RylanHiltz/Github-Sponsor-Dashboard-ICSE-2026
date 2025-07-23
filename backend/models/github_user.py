@@ -5,6 +5,7 @@ from typing import Optional
 
 @dataclass
 class UserModel:
+    github_id: int
     username: str
     name: str
     type: str
@@ -29,6 +30,7 @@ class UserModel:
     @classmethod
     def from_api(cls, data: dict):
         return cls(
+            github_id=data["id"],
             username=data["login"],
             name=data["name"],
             type=data["type"],
