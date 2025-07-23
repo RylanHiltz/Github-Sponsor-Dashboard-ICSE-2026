@@ -1,6 +1,7 @@
 from playwright.sync_api import sync_playwright
 import playwright
 import time
+import logging
 
 
 # Returns a list of usernames who are sponsoring the user, and a private use count
@@ -11,6 +12,8 @@ def scrape_sponsors(username):
     user_sponsors = list()  # Array of user sponsors
     org_sponsors = list()  # Array of organization sponsors
     sponsors_list = list()
+    user_links = []
+    org_links = []
 
     with sync_playwright() as p:
 
@@ -21,7 +24,7 @@ def scrape_sponsors(username):
         page.goto(url)
 
         if page.url == f"https://github.com/{username}":
-            print(f"{username} is not in the sponsors program.")
+            logging.info(f"{username} is not in the sponsors program, 0 sponsors.")
             # These should all be null/empty
             return [], 0
 
@@ -35,6 +38,7 @@ def scrape_sponsors(username):
             print("Sponsor count span not found.")
 
         if sponsor_div:
+            print("Starting Sponsorship Scraping for", username)
             form = sponsor_div.query_selector(
                 "form[data-target='remote-pagination.form']"
             )
@@ -45,11 +49,8 @@ def scrape_sponsors(username):
                 while True:
                     if button.is_visible() and button.is_enabled():
                         button.click()
-                        print("clicked")
                         page.wait_for_timeout(300)  # wait for sponsors to load
                     else:
-                        # Log if no button was clickable
-                        print(f"No clickable 'Show more' button found for {username}.")
                         break
             user_links = sponsor_div.query_selector_all("a[data-hovercard-type='user']")
             org_links = sponsor_div.query_selector_all(
@@ -57,31 +58,46 @@ def scrape_sponsors(username):
             )
 
         # Collect public organization sponsor names
-        for sponsor in org_links:
-            href = sponsor.get_attribute("href")
-            if href:
-                sponsor_name = href.strip("/").split("/")[-1]
-                org_sponsors.append(sponsor_name)
+        if org_links:
+            for sponsor in org_links:
+                href = sponsor.get_attribute("href")
+                if href:
+                    sponsor_name = href.strip("/").split("/")[-1]
+                    org_sponsors.append(sponsor_name)
 
         # Collect public user sponsor names
-        for sponsor in user_links:
-            href = sponsor.get_attribute("href")
-            if href:
-                sponsor_name = href.strip("/").split("/")[-1]
-                user_sponsors.append(sponsor_name)
+        if user_links:
+            for sponsor in user_links:
+                href = sponsor.get_attribute("href")
+                if href:
+                    sponsor_name = href.strip("/").split("/")[-1]
+                    user_sponsors.append(sponsor_name)
 
         browser.close()
 
         sponsors_list = user_sponsors + org_sponsors
+        user_count = len(user_sponsors)
+        org_count = len(org_sponsors)
 
         # If the sponsor count was able to be extracted, calculate private sponsors
         if sponsor_count:
             private_sponsors = sponsor_count - len(sponsors_list)
 
-        print("# of Total Sponsors: ", len(sponsors_list) + private_sponsors)
-        print("# of Private Sponsors: ", private_sponsors)
-        print("User Sponsors: ", len(user_sponsors))
-        print("Org Sponsors: ", len(org_sponsors))
+        logging.info(
+            f"# of Total Sponsors: {len(sponsors_list) + private_sponsors}, Crosscheck Link: {url}"
+        )
+        logging.info(
+            f"# of Private Sponsors {private_sponsors}, Users: {user_count}, Orgs: {org_count} (Total [Excluding Private]: {user_count + org_count})"
+        )
+        # print(
+        #     "# of Total Sponsors: ",
+        #     (len(sponsors_list) + private_sponsors),
+        #     ", Crosscheck Link:",
+        #     url,
+        # )
+        # print("# of Private Sponsors: ", private_sponsors)
+        # print("User Sponsors: ", len(user_sponsors))
+        # print("Org Sponsors: ", len(org_sponsors))
         return sponsors_list, private_sponsors
 
 
@@ -112,13 +128,25 @@ def user_sponsoring(username):
         url = f"https://github.com/{username}?tab=sponsoring"
         page.goto(url)
 
-        sponsoring_section = page.query_selector("div.col-lg-12")
+        try:
+            sponsoring_section = page.wait_for_selector("div.col-lg-12", timeout=5000)
+        except TimeoutError:
+            # Error checking for 404 Not Found (Private user activity)
+            image_locator = page.locator(
+                'img[src="	data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ8A…gCtqDfl9vpjt4JrmOra3/B72L99CCrFH3AAAAAElFTkSuQmCC"]'
+            )
+            if image_locator:
+                logging.warning(
+                    "This users account is private and cannot be accessed (but is sponsoring other user who have been scraped)"
+                )
+                return []
 
         if sponsoring_section:
 
             button = sponsoring_section.query_selector("a[class='next_page']")
 
             while True:
+
                 rows = sponsoring_section.query_selector_all("div.color-border-muted")
                 for row in rows:
                     past_sponsor = (
@@ -152,7 +180,7 @@ def user_sponsoring(username):
                 # After clicking next, re-query sponsoring_section and button
                 button = sponsoring_section.query_selector("a[class='next_page']")
 
-                # if the pagination button exists and is enabled, click and continue crawling
+                # if the pagination button exists and is enabled, click and continue scraping
                 if button and button.is_visible() and button.is_enabled():
                     button.click()
                     page.wait_for_timeout(750)
@@ -160,7 +188,9 @@ def user_sponsoring(username):
                     sponsoring_section = page.query_selector("div.col-lg-12")
                 else:
                     break
-        print(len(sponsoring_list), "Accounts Sponsored, Crosscheck Link: ", url)
+        sponsoring_count = len(sponsoring_list)
+        # print(len(sponsoring_list), "Accounts Sponsored, Crosscheck Link: ", url)
+        logging.info(f"{sponsoring_count} Accounts Sponsored, Crosscheck Link: {url}")
 
         browser.close()
         return sponsoring_list
@@ -206,5 +236,7 @@ def org_sponsoring(org_name):
                 break
 
         browser.close()
-        print(len(sponsoring_list), "Accounts Sponsored, Crosscheck Link: ", url)
+        sponsoring_count = len(sponsoring_list)
+        # print(len(sponsoring_list), "Accounts Sponsored, Crosscheck Link: ", url)
+        logging.info(f"{sponsoring_count} Accounts Sponsored, Crosscheck Link: {url}")
     return sponsoring_list
