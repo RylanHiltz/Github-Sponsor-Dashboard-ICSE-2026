@@ -2,6 +2,7 @@ from playwright.sync_api import sync_playwright
 import os
 import time
 import json
+import logging
 from dotenv import load_dotenv
 
 # Load login credentials for github auth while scraping
@@ -16,9 +17,9 @@ AUTH_PATH = "auth.json"
 # Checks if the auth file exists, returns True (expiring soon), or time remaining
 def is_auth_expiring_soon(auth_path=AUTH_PATH):
 
-    print(f"Checking if auth is expiring soon for: {auth_path}")
+    logging.debug(f"Checking if auth is expiring soon for: {auth_path}")
     if not os.path.exists(auth_path):
-        print("auth.json does not exist.")
+        logging.debug("auth.json does not exist.")
         return True
     with open(auth_path) as f:
         data = json.load(f)
@@ -28,13 +29,13 @@ def is_auth_expiring_soon(auth_path=AUTH_PATH):
         if cookie.get("expires", -1) > 0
     ]
     if not expiries:
-        print("No valid expiry timestamps found.")
+        logging.debug("No valid expiry timestamps found.")
         return True
     soonest_expiry = min(expiries)
     expires_in = soonest_expiry - time.time()
-    print(f"Soonest expiry: {soonest_expiry} (in {expires_in/3600:.2f} hours)")
+    logging.debug(f"Soonest expiry: {soonest_expiry} (in {expires_in/3600:.2f} hours)")
     time_remaining = expires_in < 24 * 3600
-    print(f"Is expiring within 24 hours? {time_remaining}")
+    logging.debug(f"Is expiring within 24 hours? {time_remaining}")
     return time_remaining
 
 
@@ -72,7 +73,7 @@ def get_auth(auth_path=AUTH_PATH):
             # Store authentication cookies in auth.json
             context.storage_state(path=auth_path)
             browser.close()
-        print("Auth recreated and saved.")
+        logging.debug("Auth recreated and saved.")
     # Github authentication file is valid/does not need to be created
     else:
-        print("Auth is valid.")
+        logging.debug("Auth is valid.")
