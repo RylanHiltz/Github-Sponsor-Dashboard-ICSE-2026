@@ -2,20 +2,41 @@ import requests
 from dotenv import load_dotenv
 import os
 import json
+import logging
+import time
 
 from backend.utils.github_api import api_request
+from backend.logs.logger_config import log_section
 
 # Load sensitive variables
 load_dotenv()
 GITHUB_TOKEN = os.getenv("PAT")
+HTTPS_MESSAGES = {
+    404: "Not Found: The requested resource does not exist. This may occur if the repository or user does not exist.",
+    409: "Conflict: The repository is empty or there is a conflict preventing the request from being processed.",
+    422: "Unprocessable Entity: The request was well-formed but could not be followed due to semantic errors (e.g., lack of permissions or invalid parameters).",
+    451: "Unavailable For Legal Reasons: The resource is not available due to legal reasons (e.g., DMCA takedown).",
+    500: "Internal Server Error: GitHub encountered an unexpected condition that prevented it from fulfilling the request.",
+    502: "Bad Gateway: GitHub is down or being upgraded. The server received an invalid response from the upstream server.",
+    504: "Gateway Timeout: The server did not receive a timely response from the upstream server.",
+}
 
 
 # Return the user activity for the passed in user (PR, commits, issues)
 def getUserActivity(user, user_id, user_type, db):
 
-    commit_count = getUserRepos(user, user_type)
-    pr_count = getPRCount(user)
-    issues_count = getIssuesCount(user)
+    start = int(time.time())
+
+    # If the user is type org, the account cannot have any of the specified user activities
+    if user_type == "Organization":
+        commit_count = 0
+        pr_count = 0
+        issues_count = 0
+    else:
+        log_section(f"Collecting User Activity Data For: {user}")
+        commit_count = getUserRepos(user)
+        pr_count = getPRCount(user)
+        issues_count = getIssuesCount(user)
 
     print(
         "commits:",
@@ -24,6 +45,9 @@ def getUserActivity(user, user_id, user_type, db):
         pr_count,
         ", issues:",
         issues_count,
+    )
+    logging.info(
+        f"DONE: Commits: {commit_count}, PR Count: {pr_count}, Issues Count: {issues_count}"
     )
 
     if (commit_count, pr_count, issues_count):
@@ -43,17 +67,18 @@ def getUserActivity(user, user_id, user_type, db):
             )
         db.commit()
         cur.close()
+
+    end = int(time.time())
+    elapsed = end - start
+    logging.info(f"User Activity Data Collected: Elapsed {elapsed:.2f}")
+
     return
 
 
 # Returns a list of public repos belonging to the passed in user
-def getUserRepos(username, user_type):
+def getUserRepos(username):
     page = 1
     all_repos = []
-
-    # If the user is an Organization, no commits to repos can be made
-    if user_type == "Organization":
-        return 0
 
     while True:
         url = f"https://api.github.com/users/{username}/repos?per_page=100&page={page}"
@@ -81,27 +106,37 @@ def getCommitCount(username, repos):
     commit_count = 0
     searched = 0
 
-    print(len(repos))
+    print(f"Checking {len(repos)} Repositories for {username}:")
 
     for repo in repos:
         url = f"https://api.github.com/repos/{username}/{repo['name']}/commits?author={username}&per_page=1"
         try:
             _, headers = api_request(url)
         except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 409:
-                print(
-                    f"Skipping repo {repo['name']} due to 409 Conflict (Empty Repository.)"
+            if e.response.status_code in HTTPS_MESSAGES:
+                logging.warning(
+                    f"{e.response.status_code}: {HTTPS_MESSAGES[e.response.status_code]}"
                 )
-                searched += 1
-                continue
             else:
                 raise  # re-raise other errors
+            searched += 1
+            print(
+                f"\rChecking repositories: {searched}/{len(repos)}",
+                end="",
+                flush=True,
+            )
+            continue
         link_header = headers.get("link")
 
         # Increment searched repo count by 1
         searched += 1
 
         if link_header is None:
+            print(
+                f"\rChecking repositories: {searched}/{len(repos)}",
+                end="",
+                flush=True,
+            )
             continue
         else:
             links = link_header.split(", ")
@@ -111,24 +146,44 @@ def getCommitCount(username, repos):
                     last_link = url
                     count = int(last_link.split("&page=")[-1])
                     commit_count += count
-    print(f"All {searched} repos scraped")
+                    print(
+                        f"\rChecking repositories: {searched}/{len(repos)}",
+                        end="",
+                        flush=True,
+                    )
+    print(f"\nAll {searched} repos scraped")
     if headers:
-        print("Remaning GitHub Tokens:", headers.get("X-RateLimit-Remaining"))
-
+        tokens = headers.get("X-RateLimit-Remaining")
+        print(f"Remaining GitHub Tokens: {tokens}")
+        logging.info(f"Remaining GitHub Tokens: {tokens}")
     return commit_count
 
 
 # Returns the total pull request count of a passed in user
 def getPRCount(username):
     url = f"https://api.github.com/search/issues?q=author:{username}+type:pr"
-    data, _ = api_request(url)
-    pr_count = data["total_count"]
+    try:
+        data, _ = api_request(url)
+        pr_count = data["total_count"]
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 422:
+            logging.warning(
+                f"{e.response.status_code}: Setting PR Count to 0, Unprocessable Entity for URL (Lack Permissions to View User)"
+            )
+            pr_count = 0
     return pr_count
 
 
 # Returns the total issue count for a passed in user
 def getIssuesCount(username):
     url = f"https://api.github.com/search/issues?q=author:{username}+type:issue"
-    data, _ = api_request(url)
-    issues_count = data["total_count"]
+    try:
+        data, _ = api_request(url)
+        issues_count = data["total_count"]
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 422:
+            logging.warning(
+                f"{e.response.status_code}: Setting Issues Count to 0, Unprocessable Entity for URL (Lack Permissions to View User)"
+            )
+            issues_count = 0
     return issues_count
