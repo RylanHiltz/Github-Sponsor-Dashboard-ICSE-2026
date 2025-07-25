@@ -14,8 +14,8 @@ GITHUB_TOKEN = os.getenv("PAT")
 HTTPS_MESSAGES = {
     404: "Not Found: The requested resource does not exist. This may occur if the repository or user does not exist.",
     409: "Conflict: The repository is empty or there is a conflict preventing the request from being processed.",
-    422: "Unprocessable Entity: The request was well-formed but could not be followed due to semantic errors (e.g., lack of permissions or invalid parameters).",
-    451: "Unavailable For Legal Reasons: The resource is not available due to legal reasons (e.g., DMCA takedown).",
+    422: "Unprocessable Entity: The request could not be followed due to semantic errors (lack of permissions or invalid parameters).",
+    451: "Unavailable For Legal Reasons: The resource is not available due to legal reasons (DMCA takedown, etc.).",
     500: "Internal Server Error: GitHub encountered an unexpected condition that prevented it from fulfilling the request.",
     502: "Bad Gateway: GitHub is down or being upgraded. The server received an invalid response from the upstream server.",
     504: "Gateway Timeout: The server did not receive a timely response from the upstream server.",
@@ -117,6 +117,8 @@ def getCommitCount(username, repos):
                 logging.warning(
                     f"{e.response.status_code}: {HTTPS_MESSAGES[e.response.status_code]}"
                 )
+                # Headers dont get added if a status code is thrown (User 1 repo no commits, still get REST headers)
+                headers = e.response.headers
             else:
                 raise  # re-raise other errors
             searched += 1
@@ -187,3 +189,9 @@ def getIssuesCount(username):
             )
             issues_count = 0
     return issues_count
+
+
+# TODO: Check if the user activity is beyond 30 days old or something? Return false if 30+ else true to avoid rescraping activity
+# This is because user activity is an extremely expensive method to run with the Github API in consideration
+def userActivityExists():
+    return
