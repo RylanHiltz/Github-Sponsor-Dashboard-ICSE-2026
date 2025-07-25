@@ -1,4 +1,4 @@
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 import playwright
 import time
 import logging
@@ -33,7 +33,7 @@ def scrape_sponsors(username):
         # Get total sponsor count for user
         counter_span = page.query_selector("span.Counter")
         if counter_span:
-            sponsor_count = int(counter_span.inner_text())
+            sponsor_count = int(counter_span.inner_text().replace(",", ""))
         else:
             print("Sponsor count span not found.")
 
@@ -89,15 +89,6 @@ def scrape_sponsors(username):
         logging.info(
             f"# of Private Sponsors {private_sponsors}, Users: {user_count}, Orgs: {org_count} (Total [Excluding Private]: {user_count + org_count})"
         )
-        # print(
-        #     "# of Total Sponsors: ",
-        #     (len(sponsors_list) + private_sponsors),
-        #     ", Crosscheck Link:",
-        #     url,
-        # )
-        # print("# of Private Sponsors: ", private_sponsors)
-        # print("User Sponsors: ", len(user_sponsors))
-        # print("Org Sponsors: ", len(org_sponsors))
         return sponsors_list, private_sponsors
 
 
@@ -129,11 +120,11 @@ def user_sponsoring(username):
         page.goto(url)
 
         try:
-            sponsoring_section = page.wait_for_selector("div.col-lg-12", timeout=5000)
-        except TimeoutError:
+            sponsoring_section = page.wait_for_selector("div.col-lg-12", timeout=4000)
+        except PlaywrightTimeoutError as e:
             # Error checking for 404 Not Found (Private user activity)
             image_locator = page.locator(
-                'img[src="	data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ8A…gCtqDfl9vpjt4JrmOra3/B72L99CCrFH3AAAAAElFTkSuQmCC"]'
+                'img[src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQ8A…gCtqDfl9vpjt4JrmOra3/B72L99CCrFH3AAAAAElFTkSuQmCC"]'
             )
             if image_locator:
                 logging.warning(
