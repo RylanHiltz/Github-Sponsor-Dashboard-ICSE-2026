@@ -236,40 +236,35 @@ def scrapePronouns(name):
 
 # Extracts the pronouns out of the pronoun span (users may have random words and pronouns mixed)
 def extract_pronouns(text):
-    # Normalize casing
     text = text.lower()
 
-    # Regex pattern to catch common pronouns, regardless of surrounding text
-    pronoun_patterns = [
-        r"\bhe/?him\b",
-        r"\bhe/?they\b",
-        r"\bshe/?her\b",
-        r"\bshe/?they\b",
-        r"\bthey/?them\b",
-    ]
+    # Normalize slashes and spaces
+    text = re.sub(r"\s*/\s*", "/", text)  # 'he / him' → 'he/him'
+    text = re.sub(r"[^\w/]", " ", text)  # remove punctuation except slash
 
-    for pattern in pronoun_patterns:
-        if re.search(pattern, text):
-            # Attempt to catch mixed pronouns, return gender Other if so
-            if ("he" in pattern and "her" in pattern) or (
-                "she" in pattern and "him" in pattern
-            ):
-                return True, "Other"
-            if (
-                "he" in pattern
-                or "him" in pattern
-                or ("he" in pattern and "they" in pattern)
-            ):
-                return True, "Male"
-            elif (
-                "she" in pattern
-                or "her" in pattern
-                or ("she" in pattern and "they" in pattern)
-            ):
-                return True, "Female"
-            elif "they" in pattern or "them" in pattern:
-                return True, "Other"
-    return False, None
+    # Tokenize and look for pronoun sets
+    pronouns = re.findall(
+        r"\b(?:he/him|she/her|they/them|he/they|she/they|he/her|she/him)\b", text
+    )
+
+    if not pronouns:
+        return False, None
+
+    found = pronouns[0]
+
+    # Check for ambiguous/mixed combinations
+    if found in ["he/her", "she/him"]:
+        return True, "Other"
+
+    if found == "he/him" or found == "he/they":
+        return True, "Male"
+    if found == "she/her" or found == "she/they":
+        return True, "Female"
+    if found == "they/them":
+        return True, "Other"
+
+    # Fallback
+    return True, "Other"
 
 
 # Infer the gender of the username using the full name and current country (assuming place of origin for some users)

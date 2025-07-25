@@ -25,7 +25,7 @@ def api_request(url):
                 logging.warning(
                     f"{res.status_code}: Repository access blocked, Skipping. {url}"
                 )
-                return [], {}  # Return empty data so scraper can continue
+                return [], res.headers
             remaining = res.headers.get("X-RateLimit-Remaining")
             reset = res.headers.get("X-RateLimit-Reset")
             # If API request tokens remaining hits 0
