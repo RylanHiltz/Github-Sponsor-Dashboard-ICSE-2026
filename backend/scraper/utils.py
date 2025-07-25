@@ -2,22 +2,21 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 import playwright
 import time
 import logging
+from backend.logs.logger_config import init_logger
 
 
 # Returns a list of usernames who are sponsoring the user, and a private use count
 def scrape_sponsors(username):
+    init_logger()
 
-    sponsor_count = 0  # Count of total sponsors on the page
-    private_sponsors = 0  # Private sponsors who do not have accessible Github's
-    user_sponsors = list()  # Array of user sponsors
-    org_sponsors = list()  # Array of organization sponsors
+    sponsor_count = 0
+    private_sponsors = 0
+    user_sponsors = list()
+    org_sponsors = list()
     sponsors_list = list()
-    user_links = []
-    org_links = []
 
     with sync_playwright() as p:
-
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=False)
         page = browser.new_page()
 
         url = f"https://github.com/sponsors/{username}"
@@ -25,69 +24,119 @@ def scrape_sponsors(username):
 
         if page.url == f"https://github.com/{username}":
             logging.info(f"{username} is not in the sponsors program, 0 sponsors.")
-            # These should all be null/empty
             return [], 0
 
-        sponsor_div = page.query_selector("#sponsors")
+        # More robust pagination handling
+        page_count = 0
+        # This limit is set by github (No way to get around pagination limit, disables show more button)
+        max_pages = 100
+        logging.info(f"Starting Sponsorship Scraping for {username}")
 
-        # Get total sponsor count for user
-        counter_span = page.query_selector("span.Counter")
-        if counter_span:
-            sponsor_count = int(counter_span.inner_text().replace(",", ""))
-        else:
-            print("Sponsor count span not found.")
+        while page_count < max_pages:
+            # Re-query sponsor_div each time to avoid stale element references
+            sponsor_div = page.query_selector("#sponsors")
+            if not sponsor_div:
+                print("Sponsors section not found, stopping")
+                break
 
-        if sponsor_div:
-            print("Starting Sponsorship Scraping for", username)
+            # print("Starting Sponsorship Scraping for", username)
+            # Wait for content to load
+            page.wait_for_timeout(1000)
+
+            # Check if pagination button exists and is clickable
             form = sponsor_div.query_selector(
                 "form[data-target='remote-pagination.form']"
             )
-            if form.is_visible():
-                button = form.query_selector(
-                    'button[data-target="remote-pagination.submitButton"]'
-                )
-                while True:
-                    if button.is_visible() and button.is_enabled():
-                        button.click()
-                        page.wait_for_timeout(300)  # wait for sponsors to load
-                    else:
+            if not form or not form.is_visible():
+                print("No pagination form found, stopping")
+                break
+
+            button = form.query_selector(
+                'button[data-target="remote-pagination.submitButton"]'
+            )
+            if not button or not button.is_visible() or not button.is_enabled():
+                print("No more pages to load")
+                break
+
+                # Check if button text indicates "Load more" vs "Loading..."
+                # button_text = button.inner_text().lower()
+                # if "loading" in button_text:
+                #     print("Button is loading, waiting...")
+            page.wait_for_timeout(1000)
+            #     continue
+
+            print(f"Loading page {page_count + 1}...")
+
+            remote_page_div = sponsor_div.query_selector(
+                "div[data-target='remote-pagination.list']"
+            )
+            if remote_page_div:
+                old_count = len(remote_page_div.query_selector_all("div.d-flex"))
+                if old_count:
+                    print("count of users?", old_count)
+
+            button.click()
+
+            # Wait for new content to load
+            for i in range(10):
+                page.wait_for_timeout(500)
+                # Re-query sponsor_div after page change
+                updated_sponsor_div = page.query_selector("#sponsors")
+                if updated_sponsor_div:
+                    new_count = len(
+                        updated_sponsor_div.query_selector_all("a.d-inline-block")
+                    )
+                    if new_count > old_count:
                         break
-            user_links = sponsor_div.query_selector_all("a[data-hovercard-type='user']")
-            org_links = sponsor_div.query_selector_all(
+            else:
+                print("No new content loaded, stopping")
+                break
+
+            page_count += 1
+
+        # Final collection - re-query one last time
+        final_sponsor_div = page.query_selector("#sponsors")
+        if final_sponsor_div:
+            private_sponsors = len(
+                final_sponsor_div.query_selector_all(
+                    "svg[aria-label='Private Sponsor']"
+                )
+            )
+            user_links = final_sponsor_div.query_selector_all(
+                "a[data-hovercard-type='user']"
+            )
+            org_links = final_sponsor_div.query_selector_all(
                 "a[data-hovercard-type='organization']"
             )
 
-        # Collect public organization sponsor names
-        if org_links:
+            print(
+                f"Final counts - Private: {private_sponsors}, Users: {len(user_links)}, Orgs: {len(org_links)}"
+            )
+
+            # Collect usernames
             for sponsor in org_links:
                 href = sponsor.get_attribute("href")
                 if href:
                     sponsor_name = href.strip("/").split("/")[-1]
                     org_sponsors.append(sponsor_name)
 
-        # Collect public user sponsor names
-        if user_links:
             for sponsor in user_links:
                 href = sponsor.get_attribute("href")
                 if href:
                     sponsor_name = href.strip("/").split("/")[-1]
                     user_sponsors.append(sponsor_name)
 
+        page.wait_for_timeout(10000)
         browser.close()
 
         sponsors_list = user_sponsors + org_sponsors
-        user_count = len(user_sponsors)
-        org_count = len(org_sponsors)
-
-        # If the sponsor count was able to be extracted, calculate private sponsors
-        if sponsor_count:
-            private_sponsors = sponsor_count - len(sponsors_list)
+        total_count = len(sponsors_list) + private_sponsors
 
         logging.info(
-            f"# of Total Sponsors: {len(sponsors_list) + private_sponsors}, Crosscheck Link: {url}"
+            f"Total Sponsors: {total_count}, Public: {len(sponsors_list)}, Private: {private_sponsors}"
         )
         logging.info(
-            f"# of Private Sponsors {private_sponsors}, Users: {user_count}, Orgs: {org_count} (Total [Excluding Private]: {user_count + org_count})"
+            f"# of Total Sponsors: {len(sponsors_list) + private_sponsors}, Crosscheck Link: {url}"
         )
         return sponsors_list, private_sponsors
 
@@ -231,3 +280,6 @@ def org_sponsoring(org_name):
         # print(len(sponsoring_list), "Accounts Sponsored, Crosscheck Link: ", url)
         logging.info(f"{sponsoring_count} Accounts Sponsored, Crosscheck Link: {url}")
     return sponsoring_list
+
+
+scrape_sponsors("evcc-io")
