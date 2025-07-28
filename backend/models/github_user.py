@@ -26,6 +26,7 @@ class UserModel:
     private_sponsor_count: int
     last_scraped: Optional[datetime]
     is_enriched: Optional[bool]
+    github_created_at: datetime
 
     @classmethod
     def from_api(cls, data: dict):
@@ -51,4 +52,5 @@ class UserModel:
             private_sponsor_count=0,
             last_scraped=None,
             is_enriched=None,
+            github_created_at=data["created_at"],
         )
