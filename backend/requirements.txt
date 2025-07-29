@@ -4,3 +4,4 @@ psycopg2
 playwright
 requests
 schedule
+flask-cors

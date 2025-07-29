@@ -13,4 +13,4 @@ auth.json
 
 # Log file of for scraper debugging
 scraper.log
-
+scraper.log.*
