@@ -458,19 +458,12 @@ def deleteUser(user, db):
         )
         db.commit()
         cur.close()
-        # print(f"Deleted {user}")
         logging.info(f"Deleted {user} From Database")
         return
 
 
-# Update final remaining data attributes at the end of worker
-def finalizeUserScrape(username, private_count, db):
-    updateScraped(username, db)
-    updatePrivate(username, private_count, db)
-
-
 # Update last_scraped for the passed in user in the DB
-def updateScraped(username, db):
+def finalizeUserScrape(username, private_count, min_sponsor_tier, db):
 
     scraped = datetime.now(timezone.utc)
 
@@ -478,27 +471,12 @@ def updateScraped(username, db):
         cur.execute(
             """
             UPDATE users SET
-                last_scraped = %s            
+                last_scraped = %s,
+                private_sponsor_count = %s,
+                min_sponsor_cost = %s     
             WHERE username = %s;
             """,
-            (scraped, username),
-        )
-        db.commit()
-        cur.close()
-    return
-
-
-# Update the private_sponsor_count for the passed in user in the DB
-def updatePrivate(username, private_count, db):
-
-    with db.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE users SET
-                private_sponsor_count = %s            
-            WHERE username = %s;
-            """,
-            (private_count, username),
+            (scraped, private_count, min_sponsor_tier, username),
         )
         db.commit()
         cur.close()

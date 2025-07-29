@@ -14,9 +14,12 @@ URL = "https://api.github.com/graphql"
 # Parent function to handle both functions running
 # Return a list of sponsors, sponsored users, and a count of private sponsors
 def get_sponsorships(username, user_type):
-    sponsor_list, private_count = get_sponsors_from_api(username, user_type)
+    logging.info(f"Starting Sponsorship Fetch via API for {user_type} '{username}'")
+    sponsor_list, private_count, lowest_tier_cost = get_sponsors_from_api(
+        username, user_type
+    )
     sponsored_list = get_sponsored_from_api(username, user_type)
-    return sponsor_list, sponsored_list, private_count
+    return sponsor_list, sponsored_list, private_count, lowest_tier_cost
 
 
 # Returns the sponsors that are associated to the passed in user
@@ -31,8 +34,10 @@ def get_sponsors_from_api(username, user_type):
 
     sponsors_list = []
     private_sponsors_count = 0
+    lowest_tier_cost = 0
     has_next_page = True
     cursor = None
+    response = None
 
     # Dynamic query template for the Github GraphQL API
     query_template = f"""
@@ -46,10 +51,17 @@ def get_sponsors_from_api(username, user_type):
           }}
           nodes {{
             privacyLevel
-            createdAt
             sponsorEntity {{
               ... on User {{ login }}
               ... on Organization {{ login }}
+            }}
+          }}
+        }}
+        sponsorsListing {{
+          tiers(first: 20) {{
+            nodes {{
+              monthlyPriceInCents
+              isOneTime
             }}
           }}
         }}
@@ -57,7 +69,6 @@ def get_sponsors_from_api(username, user_type):
     }}
     """
 
-    logging.info(f"Starting Sponsorship Fetch via API for {user_type} '{username}'")
     print(f"Starting Sponsors Fetch for {user_type} '{username}'")
     start_time = time.time()
 
@@ -65,18 +76,35 @@ def get_sponsors_from_api(username, user_type):
         variables = {"login": username, "cursor": cursor}
         query = {"query": query_template, "variables": variables}
 
-        response = postRequest(url=URL, json=query)
-
-        if response.status_code != 200:
+        try:
+            response = postRequest(url=URL, json=query)
+            data = response.json()
+        except Exception as e:
             logging.error(
-                f"API request failed with status {response.status_code}: {response.text}"
+                f"Permanently failed to fetch sponsors for '{username}' after all retries. Error: {e}"
             )
             break
 
-        data = response.json()
-        if "errors" in data:
-            logging.error(f"GraphQL errors: {data['errors']}")
-            break
+        if not cursor:
+            sponsors_listing = (
+                data.get("data", {}).get(user_type.lower(), {}).get("sponsorsListing")
+            )
+            if sponsors_listing and sponsors_listing.get("tiers"):
+                tiers = sponsors_listing["tiers"]["nodes"]
+                monthly_prices_in_cents = [
+                    tier["monthlyPriceInCents"]
+                    for tier in tiers
+                    if not tier.get("isOneTime") and "monthlyPriceInCents" in tier
+                ]
+                if monthly_prices_in_cents:
+                    lowest_tier_cost = min(monthly_prices_in_cents) / 100
+                    print(
+                        f"\nLowest monthly tier for {username}: ${lowest_tier_cost:.2f}"
+                    )
+            else:
+                # If tiers are not public, set to a baseline of $5.00
+                print(f"{username} does not have a public sponsors listing or tiers.")
+                lowest_tier_cost = 5
 
         sponsorships = (
             data.get("data", {})
@@ -113,7 +141,7 @@ def get_sponsors_from_api(username, user_type):
     logging.info(
         f"Remaining Github API Tokens: {response.headers.get("X-RateLimit-Remaining")}"
     )
-    return sponsors_list, private_sponsors_count
+    return sponsors_list, private_sponsors_count, lowest_tier_cost
 
 
 # Returns an array of users who are sponsored by the passed in user
@@ -152,12 +180,20 @@ def get_sponsored_from_api(username, user_type):
 
     start_time = time.time()
 
+    print(f"\nStarting Sponsoring Fetch for {user_type} '{username}'")
     while has_next_page:
+
         variables = {"login": username, "cursor": cursor}
         query = {"query": query_template, "variables": variables}
 
-        print(f"\nStarting Sponsoring Fetch for {user_type} '{username}'")
-        response = postRequest(url=URL, json=query)
+        try:
+            response = postRequest(url=URL, json=query)
+            data = response.json()
+        except Exception as e:
+            logging.error(
+                f"Permanently failed to fetch sponsors for '{username}' after all retries. Error: {e}"
+            )
+            break
 
         data = response.json()
         if "errors" in data:
