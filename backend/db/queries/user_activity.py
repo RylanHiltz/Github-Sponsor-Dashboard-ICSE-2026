@@ -1,197 +1,158 @@
 import requests
 from dotenv import load_dotenv
 import os
-import json
 import logging
+from flask import jsonify
+import json
 import time
-
-from backend.utils.github_api import api_request
+from backend.utils.github_api import postRequest
 from backend.logs.logger_config import log_section
+from datetime import datetime, timezone
 
 # Load sensitive variables
 load_dotenv()
+URL = "https://api.github.com/graphql"
 GITHUB_TOKEN = os.getenv("PAT")
-HTTPS_MESSAGES = {
-    404: "Not Found: The requested resource does not exist. This may occur if the repository or user does not exist.",
-    409: "Conflict: The repository is empty or there is a conflict preventing the request from being processed.",
-    422: "Unprocessable Entity: The request could not be followed due to semantic errors (lack of permissions or invalid parameters).",
-    451: "Unavailable For Legal Reasons: The resource is not available due to legal reasons (DMCA takedown, etc.).",
-    500: "Internal Server Error: GitHub encountered an unexpected condition that prevented it from fulfilling the request.",
-    502: "Bad Gateway: GitHub is down or being upgraded. The server received an invalid response from the upstream server.",
-    504: "Gateway Timeout: The server did not receive a timely response from the upstream server.",
-}
 
 
-# Return the user activity for the passed in user (PR, commits, issues)
-def getUserActivity(user, user_id, user_type, db):
+# Return the last year of user activity for the passed in user (PR, commits, issues)
+def getUserActivity(username, user_id, user_type, created_at, db=None):
 
     start = int(time.time())
 
-    # If the user is type org, the account cannot have any of the specified user activities
-    if user_type == "Organization":
-        commit_count = 0
-        pr_count = 0
-        issues_count = 0
-    else:
-        log_section(f"Collecting User Activity Data For: {user}")
-        commit_count = getUserRepos(user)
-        pr_count = getPRCount(user)
-        issues_count = getIssuesCount(user)
+    # Get year account was created from datetime string
+    dt = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ")
+    creation_year = dt.year
+    current_year = datetime.now().year
 
-    print(
-        "commits:",
-        commit_count,
-        ", pull requests:",
-        pr_count,
-        ", issues:",
-        issues_count,
-    )
-    logging.info(
-        f"DONE: Commits: {commit_count}, PR Count: {pr_count}, Issues Count: {issues_count}"
-    )
+    with db.cursor() as cur:
 
-    if (commit_count, pr_count, issues_count):
-        with db.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO user_activity (
-                user_id,
-                commit_count,
-                pr_count,
-                issues_count
+        # If the user is type org, the account cannot have any of the specified user activities
+        if user_type == "Organization":
+            logging.info(
+                f"{username} is account type {user_type}, No user activity available to query."
             )
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (user_id) DO NOTHING;
-            """,
-                (user_id, commit_count, pr_count, issues_count),
-            )
-        db.commit()
-        cur.close()
+            return
 
+        log_section(f"Collecting User Activity Data For: {username} via GraphQL")
+        print(f"\nCollecting User Activity Data For: '{username}'")
+
+        query_template = """
+        query($username: String!, $from: DateTime!, $to: DateTime!) {
+            user(login: $username) {
+                contributionsCollection(from: $from, to: $to) {
+                totalCommitContributions, totalPullRequestContributions, totalIssueContributions, totalPullRequestReviewContributions
+                }
+            }
+        }
+        """
+
+        for year in range(creation_year, current_year + 1):
+            try:
+
+                from_date = f"{year}-01-01T00:00:00Z"
+                to_date = f"{year}-12-31T23:59:59Z"
+                variables = {"username": username, "from": from_date, "to": to_date}
+
+                query = {"query": query_template, "variables": variables}
+
+                response = postRequest(URL, json=query)
+                response.raise_for_status()  # Raise an exception for bad status codes
+                data = response.json()
+
+                if "errors" in data:
+                    logging.error(
+                        f"GraphQL Error for {username} ({year}): {data['errors']}"
+                    )
+                    continue  # Skip to the next year on error
+
+                contributions = (
+                    data.get("data", {}).get("user", {}).get("contributionsCollection")
+                )
+
+                if contributions:
+                    # Create a dictionary of the user stats to grab
+                    stats = {
+                        "commits": contributions.get("totalCommitContributions", 0),
+                        "pull_requests": contributions.get(
+                            "totalPullRequestContributions", 0
+                        ),
+                        "issues": contributions.get("totalIssueContributions", 0),
+                        "reviews": contributions.get(
+                            "totalPullRequestReviewContributions", 0
+                        ),
+                    }
+                else:
+                    logging.warning(
+                        f"No contribution data for {username} in {year}. Inserting zero record."
+                    )
+                    stats = {
+                        "commits": 0,
+                        "pull_requests": 0,
+                        "issues": 0,
+                        "code_reviews": 0,
+                    }
+
+                # Convert the dictionary to a JSON string. This works for both JSON and JSONB columns.
+                stats_json = json.dumps(stats)
+                print(stats_json)
+
+                logging.info(f" -> Year {year}: {stats_json}")
+
+                cur.execute(
+                    """
+                    INSERT INTO user_activity (user_id, year, activity_data)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (user_id, year) DO UPDATE SET
+                        activity_data = EXCLUDED.activity_data,
+                        last_updated = NOW();
+                    """,
+                    (user_id, year, stats_json),
+                )
+
+            except Exception as e:
+                logging.error(
+                    f"An unexpected error occurred for {username} ({year}): {e}"
+                )
+                continue  # Skip to next year
+
+    db.commit()
+    cur.close()
     end = int(time.time())
     elapsed = end - start
-    logging.info(f"User Activity Data Collected: Elapsed {elapsed:.2f}")
-
+    logging.info(f"User Activity Data Collected: Elapsed {elapsed:.2f} seconds")
     return
 
 
-# Returns a list of public repos belonging to the passed in user
-def getUserRepos(username):
-    page = 1
-    all_repos = []
+def getTotalUserActivity(user_id, db):
 
-    while True:
-        url = f"https://api.github.com/users/{username}/repos?per_page=100&page={page}"
-        data, _ = api_request(url)
-
-        # If page has 0 repos, break
-        if not data:
-            break
-
-        all_repos.extend(data)
-
-        # If page has less than 100 enteries? (last page in api request)
-        if len(data) < 100:
-            break
-        page += 1
-    # If repos exist, get the commit count, else return 0
-    if all_repos:
-        commits = getCommitCount(username=username, repos=all_repos)
-        return commits
-    return 0
-
-
-# For the passed in repository, return the number of public commits belonging to the user
-def getCommitCount(username, repos):
-    commit_count = 0
-    searched = 0
-
-    print(f"Checking {len(repos)} Repositories for {username}:")
-
-    for repo in repos:
-        url = f"https://api.github.com/repos/{username}/{repo['name']}/commits?author={username}&per_page=1"
-        try:
-            _, headers = api_request(url)
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code in HTTPS_MESSAGES:
-                logging.warning(
-                    f"{e.response.status_code}: {HTTPS_MESSAGES[e.response.status_code]}"
-                )
-                # Headers dont get added if a status code is thrown (User 1 repo no commits, still get REST headers)
-                headers = e.response.headers
-            else:
-                raise  # re-raise other errors
-            searched += 1
-            print(
-                f"\rChecking repositories: {searched}/{len(repos)}",
-                end="",
-                flush=True,
-            )
-            continue
-        link_header = headers.get("link")
-
-        # Increment searched repo count by 1
-        searched += 1
-
-        if link_header is None:
-            print(
-                f"\rChecking repositories: {searched}/{len(repos)}",
-                end="",
-                flush=True,
-            )
-            continue
-        else:
-            links = link_header.split(", ")
-            for link in links:
-                if 'rel="last"' in link:
-                    url = link.split(";")[0].strip("<>")
-                    last_link = url
-                    count = int(last_link.split("&page=")[-1])
-                    commit_count += count
-                    print(
-                        f"\rChecking repositories: {searched}/{len(repos)}",
-                        end="",
-                        flush=True,
-                    )
-    print(f"\nAll {searched} repos scraped")
-    if headers:
-        tokens = headers.get("X-RateLimit-Remaining")
-        print(f"Remaining GitHub Tokens: {tokens}")
-        logging.info(f"Remaining GitHub Tokens: {tokens}")
-    return commit_count
-
-
-# Returns the total pull request count of a passed in user
-def getPRCount(username):
-    url = f"https://api.github.com/search/issues?q=author:{username}+type:pr"
-    try:
-        data, _ = api_request(url)
-        pr_count = data["total_count"]
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 422:
-            logging.warning(
-                f"{e.response.status_code}: Setting PR Count to 0, Unprocessable Entity for URL (Lack Permissions to View User)"
-            )
-            pr_count = 0
-    return pr_count
-
-
-# Returns the total issue count for a passed in user
-def getIssuesCount(username):
-    url = f"https://api.github.com/search/issues?q=author:{username}+type:issue"
-    try:
-        data, _ = api_request(url)
-        issues_count = data["total_count"]
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 422:
-            logging.warning(
-                f"{e.response.status_code}: Setting Issues Count to 0, Unprocessable Entity for URL (Lack Permissions to View User)"
-            )
-            issues_count = 0
-    return issues_count
-
-
-# TODO: Check if the user activity is beyond 30 days old or something? Return false if 30+ else true to avoid rescraping activity
-# This is because user activity is an extremely expensive method to run with the Github API in consideration
-def userActivityExists():
-    return
+    with db.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                    SUM((activity_data->>'commits')::BIGINT),
+                    SUM((activity_data->>'pull_requests')::BIGINT),
+                    SUM((activity_data->>'issues')::BIGINT),
+                    SUM((activity_data->>'reviews')::BIGINT)
+                FROM
+                    user_activity
+                WHERE
+                    user_id = %s;
+                """,
+            (user_id,),
+        )
+        result = cur.fetchone()
+        if result and result[0] is not None:
+            return {
+                "total_commits": result[0],
+                "total_pull_requests": result[1],
+                "total_issues": result[2],
+                "total_reviews": result[3],
+            }
+    # Return zero values if no activity is found
+    return {
+        "total_commits": 0,
+        "total_pull_requests": 0,
+        "total_issues": 0,
+        "total_reviews": 0,
+    }
