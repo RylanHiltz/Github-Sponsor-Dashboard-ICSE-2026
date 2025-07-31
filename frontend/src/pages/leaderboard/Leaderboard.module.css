@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.stats {
+  @apply bg-[#1D1D1D] col-span-1 h-full w-full rounded-xl p-5 text-left min-w-[200px];
+}
+
+.stats h2 {
+  @apply text-[30px] leading-7 font-bold;
+}
+
+.stats h3 {
+  @apply text-lg text-gray-500;
+}
+
+.nowrapHeader {
+  white-space: nowrap !important;
+}
+
+/* Test */
+.carouselContainer {
+  position: relative;
+  @apply h-full w-full;
+  overflow: hidden;
+  z-index: 0;
+  /* Optional: Add a gradient fade effect on the edges for a cleaner look */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 5%,
+    black 90%,
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 5%,
+    black 90%,
+    transparent
+  );
+}
+
+/* ! THIS NEEDS SOME SLIGHT REWORKING, IT KIND OF JUMPS AROUND WHEN IT RESTARTS THE ANIMATION */
+
+/* This is the track that will be animated */
+.carouselTrack {
+  display: flex;
+  @apply h-full;
+  /* Adjust the duration (40s) to make the animation faster or slower */
+  animation: scroll 30s linear infinite;
+}
+
+/* Pause the animation when the user hovers over the container */
+.carouselContainer:hover .carouselTrack {
+  animation-play-state: paused;
+}
+
+/* The keyframe animation that moves the track */
+@keyframes scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
