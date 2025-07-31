@@ -7,6 +7,10 @@
   line-height: 1.5;
   font-weight: 400;
 
+  --button-bg: #1c1c1c;
+
+  --dark-gray: #141414;
+
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
@@ -15,4 +19,21 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  @apply w-[6px] bg-[#292929] p-2 rounded-lg;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: none;
+  margin: 0px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-[#474747] border-[10px] rounded-lg;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  @apply bg-[#585858];
 }
