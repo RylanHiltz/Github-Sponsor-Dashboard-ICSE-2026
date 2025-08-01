@@ -26,8 +26,11 @@ def get_sponsorships(username, user_type):
 def get_sponsors_from_api(username, user_type):
     """
     Fetches all sponsors for a given user or organization using the GitHub GraphQL API.
-    :param username: The login name of the user or organization.
-    :param user_type: The type of account, either 'user' or 'organization'.
+        :param username: The login name of the user or organization.
+        :param user_type: The type of account, either 'user' or 'organization'.
+
+    If a user does not have a minimum monthly tier, the database will set that value to 0.
+    Their monthly income estimate will be derived from the median monthly sponsor cost.
     """
     if user_type.lower() not in ["user", "organization"]:
         raise ValueError("user_type must be 'user' or 'organization'")
@@ -103,8 +106,7 @@ def get_sponsors_from_api(username, user_type):
                     )
             else:
                 # If tiers are not public, set to a baseline of $5.00
-                print(f"{username} does not have a public sponsors listing or tiers.")
-                lowest_tier_cost = 5
+                print(f"\n{username} does not have a public sponsors listing or tiers.")
 
         sponsorships = (
             data.get("data", {})
@@ -112,9 +114,7 @@ def get_sponsors_from_api(username, user_type):
             .get("sponsorshipsAsMaintainer")
         )
         if not sponsorships:
-            logging.warning(
-                f"Could not retrieve sponsorships for {username}. They may not be in the sponsor program or the user type is wrong."
-            )
+            logging.info(f"Could not retrieve sponsorships for {username}.")
             break
 
         if not cursor:  # Only log total on the first page
@@ -122,6 +122,8 @@ def get_sponsors_from_api(username, user_type):
             logging.info(f"Total sponsors reported by API: {total_sponsors}")
 
         for node in sponsorships.get("nodes", []):
+            if not node:
+                continue
             if node.get("privacyLevel") == "PRIVATE":
                 private_sponsors_count += 1
             elif node.get("sponsorEntity") and node["sponsorEntity"].get("login"):

@@ -65,7 +65,7 @@ def get_auth(auth_path=AUTH_PATH):
             page = context.new_page()
             page.goto("https://github.com/login")
 
-            # Fill in loging info and submit
+            # Fill in login info and submit
             page.locator('input[name="login"]').fill(USERNAME)
             page.locator('input[name="password"]').fill(PASSWORD)
             page.locator('input[type="submit"]').click()
