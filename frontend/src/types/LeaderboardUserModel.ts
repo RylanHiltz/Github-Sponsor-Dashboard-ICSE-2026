@@ -23,3 +23,8 @@ export interface LeaderboardTable {
     total_users: string,
     users: LeaderboardUser[],
 }
+
+export interface LeaderboardCard {
+    title: string,
+    value: string | React.ReactNode,
+}
