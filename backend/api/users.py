@@ -11,6 +11,10 @@ users_bp = Blueprint("users", __name__)
 @users_bp.route("/api/users", methods=["GET"])
 def get_users():
 
+    # Establish connection to database
+    conn = db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
     try:
         # Get pagination parameters from query string, with defaults
         page = int(request.args.get("page", 1))
@@ -41,10 +45,6 @@ def get_users():
             "total_sponsoring": "total_sponsoring",
             "estimated_earnings": "estimated_earnings",
         }
-
-        # Establish connection to database
-        conn = db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
 
         where_clauses = []
         order_clause = []
@@ -187,13 +187,89 @@ def get_locations():
     try:
         conn = db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        # This query leverages an index on the 'location' column for both
-        # sorting and finding distinct values efficiently.
         location_query = "SELECT DISTINCT location FROM users WHERE location IS NOT NULL ORDER BY location ASC;"
         cur.execute(location_query)
         location_list = [row["location"] for row in cur.fetchall()]
         cur.close()
         conn.close()
         return jsonify(location_list), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@users_bp.route("/api/user/<int:user_id>", methods=["GET"])
+def get_user(user_id):
+
+    # Establish connection to database
+    conn = db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        data_query = """
+        WITH user_details AS (
+            SELECT * FROM users WHERE id = %s
+        ),
+        activity_summary AS (
+            SELECT
+                SUM((ua.activity_data->>'commits')::BIGINT) AS total_commits,
+                SUM((ua.activity_data->>'pull_requests')::BIGINT) AS total_pull_requests,
+                SUM((ua.activity_data->>'issues')::BIGINT) AS total_issues,
+                SUM((ua.activity_data->>'reviews')::BIGINT) AS total_reviews,
+                (
+                    SELECT json_agg(
+                        json_build_object(
+                            'year', year,
+                            'activity_data', activity_data
+                        ) ORDER BY year DESC
+                    )
+                    FROM user_activity
+                    WHERE user_id = ua.user_id
+                ) AS yearly_activity_data
+            FROM
+                user_activity AS ua
+            WHERE
+                ua.user_id = %s
+            GROUP BY
+                ua.user_id
+        ),
+        sponsor_data AS (
+            SELECT 
+                u.id,
+                COALESCE(COUNT(DISTINCT s1.sponsor_id), 0) + 
+                COALESCE(u.private_sponsor_count, 0) AS total_sponsors,
+                COALESCE((
+                    SELECT COUNT(DISTINCT s2.sponsored_id)
+                    FROM sponsorship s2
+                    WHERE s2.sponsor_id = u.id
+                ), 0) AS total_sponsoring
+            FROM users u
+            LEFT JOIN sponsorship s1 ON s1.sponsored_id = u.id
+            WHERE u.id = %s
+            GROUP BY u.id, u.private_sponsor_count
+        )
+        SELECT
+            row_to_json(ud) AS user_data,
+            row_to_json(as_sum) AS activity_data,
+            row_to_json(sd) AS sponsor_data
+        FROM
+            user_details ud
+        LEFT JOIN activity_summary as_sum ON true
+        LEFT JOIN sponsor_data sd ON true;
+        """
+        cur.execute(data_query, (user_id, user_id, user_id))
+        user_data = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if user_data and user_data["user_data"]:
+            # Combine user data and activity data into a single dictionary
+            response_data = user_data["user_data"]
+            if user_data["activity_data"]:
+                response_data.update(user_data["activity_data"])
+            if user_data["sponsor_data"]:
+                response_data.update(user_data["sponsor_data"])
+            return jsonify(response_data), 200
+        else:
+            return jsonify({"error": "User not found"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
