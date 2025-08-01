@@ -1,14 +1,16 @@
-import { useEffect, useState, useRef, useLayoutEffect } from 'react'
+import { useEffect, useState, useRef, useLayoutEffect, } from 'react'
+import React from 'react';
 import styles from './Leaderboard.module.css'
-import { Button, Space, Table, Pagination } from 'antd';
+import { Button, Table, Pagination } from 'antd';
 import { useNavigate } from 'react-router';
 import { apiUrl } from '../../api';
+import { createStyles } from 'antd-style';
 
+// Type imports 
 import type { TableProps, TablePaginationConfig } from 'antd';
 import type { LeaderboardUser } from '../../types/LeaderboardUserModel';
 import type { ColumnsType } from 'antd/es/table';
 import type { FilterValue, SortOrder } from 'antd/es/table/interface';
-import { createStyles } from 'antd-style';
 
 
 const useStyle = createStyles(({ css, prefixCls }) => {
@@ -27,6 +29,9 @@ const useStyle = createStyles(({ css, prefixCls }) => {
         /* Add this rule to prevent header text from wrapping */
         .${prefixCls}-table-thead > tr > th {
           white-space: nowrap;
+          user-select: none;
+        }
+        .${prefixCls}-ant-table-column-title {
         }
       }
     `,
@@ -36,6 +41,21 @@ const useStyle = createStyles(({ css, prefixCls }) => {
 interface Location {
     text: string,
     value: string
+}
+
+interface LeaderboardStatsData {
+    total_users: number;
+    total_sponsorships: number;
+    top_sponsored: {
+        username: string;
+        avatar_url: string;
+        total_sponsors: number;
+    };
+    top_sponsoring: {
+        username: string;
+        avatar_url: string;
+        total_sponsoring: number;
+    };
 }
 
 const Leaderboard: React.FC = () => {
@@ -54,6 +74,8 @@ const Leaderboard: React.FC = () => {
     const [filters, setFilters] = useState<Record<string, FilterValue | null>>({});
     const [locationFilters, setLocationFilters] = useState<Location[]>([])
     const [sorters, setSorters] = useState<Record<string, SortOrder | null>>({});
+    const [leaderboardData, setLeaderboardData] = useState<LeaderboardStatsData | null>(null);
+
 
     // Default pagination values
     const [pagination, setPagination] = useState<TablePaginationConfig>({
@@ -61,6 +83,7 @@ const Leaderboard: React.FC = () => {
         pageSize: 10,
         total: 0,
     });
+
 
     const fetchUsers = async (
         currentPagination: TablePaginationConfig,
@@ -117,39 +140,56 @@ const Leaderboard: React.FC = () => {
     };
 
     useEffect(() => {
+        getLeaderboardStats();
+    }, []);
+
+    useEffect(() => {
         fetchUsers(pagination, filters, sorters);
-        // Add `sorters` to the dependency array
+        getLocations();
+
     }, [pagination.current, pagination.pageSize, filters, sorters]);
 
 
-    useEffect(() => {
-        async function getLocations() {
-            try {
-                const response = await fetch(`${apiUrl}/api/users/location`);
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    async function getLocations() {
+        try {
+            const response = await fetch(`${apiUrl}/api/users/location`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
-                const data = await response.json();
-                console.log(data)
+            const data = await response.json();
+            console.log(data)
 
-                const locationData = data.map((location: string) => ({
-                    text: location,
-                    value: location,
-                }));
-                setLocationFilters(locationData);
+            const locationData = data.map((location: string) => ({
+                text: location,
+                value: location,
+            }));
+            setLocationFilters(locationData);
 
-            } catch (error) {
-            }
+        } catch (error) {
         }
-        getLocations();
-    }, []);
+    }
 
+    // Get leaderboard statistics every 15 seconds for live updating carousel
+    const getLeaderboardStats = async () => {
+        try {
+            const response = await fetch(`${apiUrl}/api/stats/brief`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+            const data: LeaderboardStatsData = await response.json();
+
+            setLeaderboardData(data);
+            setTimeout(getLeaderboardStats, 15000);
+
+        } catch (error) {
+            console.error("Error fetching leaderboard stats:", error);
+        }
+    };
 
     const columns: ColumnsType<LeaderboardUser> = [
         {
             title: "Username",
             dataIndex: "username",
             key: "username",
-            width: 30,
+            width: 115,
             sortDirections: ["descend", "ascend"],
             sorter: true,
             // You can access any property from the record in the render function:
@@ -161,12 +201,18 @@ const Leaderboard: React.FC = () => {
                     </span>
                 </>
             ),
+            onCell: () => ({
+                style: {
+                    whiteSpace: 'normal', // Allow wrapping for this column
+                    textOverflow: "hidden",
+                },
+            }),
         },
         {
             title: "Name",
             dataIndex: "name",
             key: "name",
-            width: 10,
+            width: 110,
             sorter: true,
             sortDirections: ["descend", "ascend"],
             render: (text: string) =>
@@ -176,7 +222,7 @@ const Leaderboard: React.FC = () => {
             title: "Type",
             dataIndex: "type",
             key: "type",
-            width: 80,
+            width: 70,
             filters: [
                 {
                     text: 'User',
@@ -192,7 +238,7 @@ const Leaderboard: React.FC = () => {
             title: "Gender",
             dataIndex: "gender",
             key: "gender",
-            width: 80,
+            width: 85,
             filters: [
                 {
                     text: 'Male',
@@ -216,7 +262,7 @@ const Leaderboard: React.FC = () => {
             title: "Location",
             dataIndex: "location",
             key: "location",
-            width: 75,
+            width: 110,
             filters: locationFilters,
             filterSearch: true,
         },
@@ -224,7 +270,7 @@ const Leaderboard: React.FC = () => {
             title: "Followers",
             dataIndex: "followers",
             key: "followers",
-            width: 80,
+            width: 100,
             sorter: {
                 multiple: 2,
             },
@@ -234,7 +280,7 @@ const Leaderboard: React.FC = () => {
             title: "Following",
             dataIndex: "following",
             key: "following",
-            width: 80,
+            width: 100,
             sorter: {
                 multiple: 2,
             },
@@ -244,7 +290,7 @@ const Leaderboard: React.FC = () => {
             title: "Repos",
             dataIndex: "public_repos",
             key: "repos",
-            width: 65,
+            width: 75,
             sorter: {
                 multiple: 1,
             },
@@ -254,7 +300,7 @@ const Leaderboard: React.FC = () => {
             title: "Sponsors",
             dataIndex: "total_sponsors",
             key: "sponsors",
-            width: 85,
+            width: 100,
             sorter: {
                 multiple: 2,
             },
@@ -264,7 +310,7 @@ const Leaderboard: React.FC = () => {
             title: "Sponsoring",
             dataIndex: "total_sponsoring",
             key: "sponsoring",
-            width: 95,
+            width: 110,
             sorter: {
                 multiple: 2,
             },
@@ -275,7 +321,7 @@ const Leaderboard: React.FC = () => {
             dataIndex: "estimated_earnings",
             className: styles.nowrapHeader,
             key: "earnings",
-            width: 130,
+            width: 165,
             render: (_: any, record: LeaderboardUser) => (
                 <span style={{ fontWeight: 600 }}>
                     ${Math.round(record.estimated_earnings)}<span style={{ fontWeight: 400, fontSize: 12 }}>+ USD/mo</span>
@@ -296,8 +342,6 @@ const Leaderboard: React.FC = () => {
         const sortersArray = Array.isArray(newSorters) ? newSorters : [newSorters];
         const formattedSorters = sortersArray.reduce((acc, s) => {
             if (s.field && s.order) {
-                // Ant Design's SorterResult can have a field as Key | readonly Key[]
-                // We handle both cases by joining if it's an array.
                 const key = Array.isArray(s.field) ? s.field.join('.') : String(s.field);
                 acc[key] = s.order;
             }
@@ -321,7 +365,6 @@ const Leaderboard: React.FC = () => {
     }
 
     useLayoutEffect(() => {
-
         getDynamicHeight();
 
         window.addEventListener('resize', getDynamicHeight);
@@ -332,27 +375,48 @@ const Leaderboard: React.FC = () => {
 
     return (
         <>
-            <section className='grid grid-cols-1 grid-rows-[_1.5fr,5fr] h-full px-4'>
-                <div className='flex flex-col gap-3 w-full pb-5'>
-                    <h1 className='text-[24px] font-semibold gap-3'>Leaderboard Statistics</h1>
+            <section className='grid grid-cols-1 grid-rows-[_1fr,5fr] h-full px-4 gap-3'>
+                <div className='flex flex-col flex-shrink-0 gap-5 w-full pb-5'>
+                    <h1 className='text-[24px] font-semibold pb-1'>Leaderboard Statistics</h1>
                     <div className={styles.carouselContainer}>
                         <div className={styles.carouselTrack}>
-                            {[
-                                { title: "Total Users Tracked", value: "10,000+" },
-                                { title: "Unique Sponsorships", value: "25,000+" },
-                                { title: "Top Sponsored", value: "Neovim" },
-                                { title: "Top Sponsoring", value: "Shopify" },
-                                { title: "Total Users Tracked", value: "10,000+" },
-                                { title: "Unique Sponsorships", value: "25,000+" },
-                                { title: "Top Sponsored", value: "Neovim" },
-                                { title: "Top Sponsoring", value: "Shopify" },
-                            ].map((stat, index) => (
-                                <div key={index} className='flex-shrink-0 h-full w-1/4 px-2'>
-                                    <div className={`${styles.stats} flex-none`}>
-                                        <h3>{stat.title}</h3>
-                                        <h2>{stat.value}</h2>
+                            {leaderboardData && [...Array(2)].map((_, i) => (
+                                <React.Fragment key={i}>
+                                    <div className='flex-shrink-0 h-full w-1/4 px-2'>
+                                        <div className={`${styles.stats} flex-none`}>
+                                            <h3>Total Users Tracked</h3>
+                                            <h2 id="total-users-stat">{leaderboardData.total_users.toLocaleString()}</h2>
+                                        </div>
                                     </div>
-                                </div>
+                                    <div className='flex-shrink-0 h-full w-1/4 px-2'>
+                                        <div className={`${styles.stats} flex-none`}>
+                                            <h3>Unique Sponsorships</h3>
+                                            <h2 id="total-sponsorships-stat">{leaderboardData.total_sponsorships.toLocaleString()}</h2>
+                                        </div>
+                                    </div>
+                                    <div className='flex-shrink-0 h-full w-1/4 px-2'>
+                                        <div className={`${styles.stats} flex-none`}>
+                                            <h3>Top Sponsored</h3>
+                                            <h2>
+                                                <span className='flex items-center justify-start gap-2'>
+                                                    <img src={leaderboardData.top_sponsored.avatar_url} alt={leaderboardData.top_sponsored.username} className='w-8 h-8 rounded-full' />
+                                                    <p className='pb-1 text-[30px]'>{leaderboardData.top_sponsored.username}</p>
+                                                </span>
+                                            </h2>
+                                        </div>
+                                    </div>
+                                    <div className='flex-shrink-0 h-full w-1/4 px-2'>
+                                        <div className={`${styles.stats} flex-none`}>
+                                            <h3>Top Sponsoring</h3>
+                                            <h2>
+                                                <span className='flex items-center justify-start gap-2'>
+                                                    <img src={leaderboardData.top_sponsoring.avatar_url} alt={leaderboardData.top_sponsoring.username} className='w-8 h-8 rounded-full' />
+                                                    <p className='pb-1 text-[30]'>{leaderboardData.top_sponsoring.username}</p>
+                                                </span>
+                                            </h2>
+                                        </div>
+                                    </div>
+                                </React.Fragment>
                             ))}
                         </div>
                     </div>
@@ -367,7 +431,7 @@ const Leaderboard: React.FC = () => {
                             showSorterTooltip={{ target: 'sorter-icon' }}
                             tableLayout='fixed'
                             onRow={(record) => ({
-                                onClick: () => navigate(`/user/${record.id}`),
+                                onClick: () => navigate(`/user/${record.id}`, { state: record }),
                                 style: { cursor: "pointer" }
                             })}
                             onChange={handleTableChange}

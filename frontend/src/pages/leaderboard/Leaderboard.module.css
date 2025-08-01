@@ -11,7 +11,7 @@
 }
 
 .stats h3 {
-  @apply text-lg text-gray-500;
+  @apply text-[16px] leading-7 text-[#848484];
 }
 
 .nowrapHeader {
@@ -24,7 +24,6 @@
   @apply h-full w-full;
   overflow: hidden;
   z-index: 0;
-  /* Optional: Add a gradient fade effect on the edges for a cleaner look */
   -webkit-mask-image: linear-gradient(
     to right,
     transparent,
@@ -43,20 +42,16 @@
 
 /* ! THIS NEEDS SOME SLIGHT REWORKING, IT KIND OF JUMPS AROUND WHEN IT RESTARTS THE ANIMATION */
 
-/* This is the track that will be animated */
 .carouselTrack {
   display: flex;
   @apply h-full;
-  /* Adjust the duration (40s) to make the animation faster or slower */
   animation: scroll 30s linear infinite;
 }
 
-/* Pause the animation when the user hovers over the container */
 .carouselContainer:hover .carouselTrack {
   animation-play-state: paused;
 }
 
-/* The keyframe animation that moves the track */
 @keyframes scroll {
   from {
     transform: translateX(0);
