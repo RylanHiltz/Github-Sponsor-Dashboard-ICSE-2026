@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.profileCard {
+  @apply bg-[--profile-bg] flex-1 rounded-2xl p-6 border-[1px] border-[#303030];
+}
