@@ -12,6 +12,7 @@ import { theme as appTheme } from './theme.ts';
 // A new component to access the context provided by ThemeProvider
 const ThemedApp = () => {
   const { theme } = useTheme();
+  const themeColors = appTheme.extend.colors;
 
   return (
     <ConfigProvider
@@ -20,8 +21,8 @@ const ThemedApp = () => {
         token: {
           // Primary Color
           colorPrimary: theme === 'dark'
-            ? appTheme.extend.colors.primary.dark
-            : appTheme.extend.colors.primary.light,
+            ? themeColors.primary.dark
+            : themeColors.primary.light,
 
           colorBgContainer: theme === 'dark' ? '#141414' : '#fff',
         },
