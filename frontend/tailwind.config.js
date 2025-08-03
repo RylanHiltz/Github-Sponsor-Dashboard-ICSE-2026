@@ -1,4 +1,4 @@
-import { theme } from './src/theme.js'; // Import the shared theme
+import { theme } from './src/theme.ts'; // Import the shared theme
 
 /** @type {import('tailwindcss').Config} */
 export default {
