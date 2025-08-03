@@ -5,6 +5,7 @@ import styles from "./User.module.css"
 import { Button, Skeleton } from 'antd'
 import { apiUrl } from '../../api'
 import { Line } from 'react-chartjs-2';
+import { IoChevronBackOutline } from "react-icons/io5";
 
 import type { UserModel, YearlyActivityData } from '../../types/UserModel'
 import type { ChartData, ChartOptions } from 'chart.js';
@@ -114,7 +115,7 @@ const User: React.FC = () => {
                 codeReviewsData.push(d.activity_data.reviews);
             });
 
-            const newChartData = {
+            const newChartData: ChartData<'line'> = {
                 labels: commitLabels,
                 datasets: [
                     {
@@ -123,7 +124,7 @@ const User: React.FC = () => {
                         borderColor: '#A855F7', // Purple
                         backgroundColor: 'rgba(168, 85, 247, 0.2)',
                         fill: true,
-                        tension: 0.4,
+                        tension: 0.5,
                         pointBackgroundColor: '#A855F7',
                         pointRadius: 3,
                     },
@@ -175,11 +176,10 @@ const User: React.FC = () => {
 
     return (
         <>
-
             <div className='h-full'>
                 <div className="flex flex-col h-full px-5 gap-5">
-                    <Button className='w-min' type='text' onClick={navigateLeaderboard}> Back To Dashboard</Button>
-                    <section className='flex-grow grid grid-cols-[_2fr,34em] grid-rows-[_3fr,_3fr] gap-5'>
+                    <Button className='w-min' type='text' onClick={navigateLeaderboard}><IoChevronBackOutline /> Back To Dashboard</Button>
+                    <section className='flex-grow grid grid-cols-[_2fr,30em] grid-rows-[_3fr,_3fr] gap-5'>
                         <div className={`${styles.profileCard} row-span-1 flex flex-col justify-between`}>
                             <div className='flex flex-col gap-3'>
                                 <div className='flex items-center gap-4'>
@@ -249,118 +249,75 @@ const User: React.FC = () => {
                         </div>
 
 
-                        <div className={`${styles.profileCard} row-span-3`}>
-                            <div className='flex flex-col gap-5'>
-                                <div className='flex flex-col gap-3 flex-grow'>
-                                    <h2 className="text-xl font-semibold">User Activity Statistics</h2>
-                                    <div className='grid grid-cols-2 gap-5 grow'>
-                                        {([
-                                            {
-                                                label: "Total Commits", value: user?.total_commits, color: {
-                                                    bg: 'rgba(168, 85, 247, 0.2)', border: '#A855F7', text: '#A855F7',
-                                                }
-                                            },
-                                            {
-                                                label: "Total Issues", value: user?.total_issues, color: {
-                                                    bg: 'rgba(236, 72, 153, 0.2)', border: '#EC4899', text: '#EC4899',
-                                                }
-                                            },
-                                            {
-                                                label: "Total PRs", value: user?.total_pull_requests, color: {
-                                                    bg: 'rgba(34, 211, 238, 0.2)', border: '#22D3EE', text: '#22D3EE',
-                                                }
-                                            },
-                                            {
-                                                label: "Total Reviews", value: user?.total_reviews, color: {
-                                                    bg: 'rgba(96, 165, 250, 0.2)', border: '#60A5FA', text: '#60A5FA',
-                                                }
-                                            },
-                                        ]).map((stat, index) => (
-                                            <div
-                                                key={index}
-                                                className="p-4 rounded-xl flex flex-col justify-center items-center text-center"
-                                                style={{
-                                                    backgroundColor: stat.color.bg,
-                                                    // border: `1.5px solid ${stat.color.border}`
-                                                }}
-                                            >
-                                                <p className="text-gray-400 text-sm mb-1">{stat.label}</p>
-                                                {isLoading ? (
-                                                    <Skeleton.Input active={true} size="small" />
-                                                ) : (
-                                                    <p
-                                                        className="text-xl font-bold"
-                                                        style={{ color: stat.color.text }}
-                                                    >
-                                                        {stat.value?.toLocaleString() ?? 'N/A'}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className='flex flex-col gap-3'>
-                                    <h2 className="text-xl font-semibold">Sponsorship Statistics</h2>
-                                    <div className='grid grid-cols-2 gap-5 grow'>
-                                        {([
-                                            { label: "Total User Sponsors", value: user?.total_sponsors },
-                                            { label: "Total Users Sponsoring", value: user?.total_sponsoring },
-                                            { label: "Private Sponsors", value: user?.private_sponsor_count },
-                                            { label: "Minimum Sponsor Tier", value: user?.min_sponsor_cost },
-                                        ]).map((stat, index) => (
-                                            <div key={index} className="bg-[#262626] p-4 rounded-xl flex flex-col justify-center items-center text-center">
-                                                <p className="text-gray-400 text-sm mb-1">{stat.label}</p>
-                                                {isLoading ? (
-                                                    <Skeleton.Input active={true} size="small" />
-                                                ) : (
-                                                    <p className="text-xl font-bold">
-                                                        {stat.value != null ?
-                                                            (stat.label === "Minimum Sponsor Tier" ? `$${stat.value.toLocaleString()}.00` : stat.value.toLocaleString())
-                                                            : 'N/A'
-                                                        }
-                                                    </p>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className='flex flex-col gap-3 flex-grow'>
-                                    <h2 className="text-xl font-semibold">{user?.type} Account Statistics</h2>
-                                    <div className='grid grid-cols-2 gap-5 grow'>
-                                        {([
-                                            { label: "Total Repos", value: user?.public_repos },
-                                            { label: "Total Gists", value: user?.public_gists },
-                                        ]).map((stat, index) => (
-                                            <div key={index} className="bg-[#262626] p-4 rounded-xl flex flex-col justify-center items-center text-center">
-                                                <p className="text-gray-400 text-sm mb-1">{stat.label}</p>
-                                                {isLoading ? (
-                                                    <Skeleton.Input active={true} size="small" />
-                                                ) : (
-                                                    <p className="text-xl font-bold">{stat.value?.toLocaleString() ?? 'N/A'}</p>
-                                                )}
-                                            </div>
-                                        ))}
-                                        {([
-                                            { label: "Account Created", value: user?.github_created_at },
-                                            { label: "Last Checked", value: user?.last_scraped },
-                                        ]).map((stat, index) => (
-                                            <div key={index} className="bg-[#262626] p-4 rounded-xl flex flex-col justify-center items-center text-center">
-                                                <p className="text-gray-400 text-sm mb-1">{stat.label}</p>
-                                                {isLoading ? (
-                                                    <Skeleton.Input active={true} size="small" />
-                                                ) : (
-                                                    <p className="text-xl font-bold">
-                                                        {stat.value ? new Date(stat.value).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                        {/*  */}
+                        <div className={`${styles.profileCard} row-span-3 p-6`}>
+                            <div className="flex flex-col h-full gap-5 justify-evenly">
+                                {(() => {
+                                    const StatRow = ({ label, value, format }: { label: string, value: any, format?: 'currency' | 'date' | 'number' }) => {
+                                        let displayValue = 'N/A';
+                                        if (value != null) {
+                                            switch (format) {
+                                                case 'currency':
+                                                    displayValue = `$${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                                                    break;
+                                                case 'date':
+                                                    displayValue = new Date(value).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                                                    break;
+                                                default:
+                                                    displayValue = value.toLocaleString();
+                                            }
+                                        }
 
+                                        return (
+                                            <div className="flex justify-between items-center py-2.5 border-b border-[#434343] last:border-b-0">
+                                                <p className="text-gray-400 text-sm">{label}</p>
+                                                {isLoading ? (
+                                                    <Skeleton.Input active={true} size="small" style={{ width: 100, background: '#333' }} />
+                                                ) : (
+                                                    <p className="text-base font-semibold text-white">{displayValue}</p>
+                                                )}
+                                            </div>
+                                        );
+                                    };
 
+                                    return (
+                                        <>
+                                            <div>
+                                                <h2 className="text-lg font-semibold text-white mb-2">User Activity</h2>
+                                                <div className="bg-[#262626] rounded-lg px-4">
+                                                    <StatRow label="Total Commits" value={user?.total_commits} />
+                                                    <StatRow label="Total Issues" value={user?.total_issues} />
+                                                    <StatRow label="Total Pull Requests" value={user?.total_pull_requests} />
+                                                    <StatRow label="Total Code Reviews" value={user?.total_reviews} />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <h2 className="text-lg font-semibold text-white mb-2">Sponsorships</h2>
+                                                <div className="bg-[#262626] rounded-lg px-4">
+                                                    <StatRow label="Sponsors" value={user?.total_sponsors} />
+                                                    <StatRow label="Sponsoring" value={user?.total_sponsoring} />
+                                                    <StatRow label="Minimum Tier" value={user?.min_sponsor_cost} format="currency" />
+                                                    <StatRow label="Est. Min Earnings" value={null} format="currency" />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <h2 className="text-lg font-semibold text-white mb-2">Account Data</h2>
+                                                <div className="bg-[#262626] rounded-lg px-4">
+                                                    <StatRow label="Public Repositories" value={user?.public_repos} />
+                                                    <StatRow label="Public Gists" value={user?.public_gists} />
+                                                    <StatRow label="Account Created" value={user?.github_created_at} format="date" />
+                                                    <StatRow label="Last Checked" value={user?.last_scraped} format="date" />
+                                                </div>
+                                            </div>
+                                        </>
+                                    );
+                                })()}
                             </div>
                         </div>
+
+                        {/* Visualized user activity graph section */}
                         <div className={`${styles.profileCard} row-span-2 flex flex-col gap-5 p-5 h-full`}>
                             <h2 className="text-xl font-semibold">Visualized User Activity</h2>
                             <div className='relative flex-grow'>
