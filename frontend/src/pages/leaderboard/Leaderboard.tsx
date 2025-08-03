@@ -4,6 +4,7 @@ import { Table, Pagination } from 'antd';
 import { useNavigate } from 'react-router';
 import { apiUrl } from '../../api';
 import { createStyles } from 'antd-style';
+import Carousel from '../../components/Carousel';
 
 // Type imports 
 import type { TableProps, TablePaginationConfig } from 'antd';
@@ -369,10 +370,13 @@ const Leaderboard: React.FC = () => {
 
     return (
         <>
-            <section className='grid grid-cols-1 grid-rows-[_1fr,5fr] h-full px-4 gap-3'>
-                <div className='flex flex-col flex-shrink-0 gap-5 w-full pb-5'>
+            <section className='grid grid-cols-1 grid-rows-[_1.2fr,5fr] h-full px-4 gap-3'>
+                <div className='flex flex-col flex-shrink-0 gap-2 w-full h-full'>
                     <h1 className='text-[24px] font-semibold pb-1'>Leaderboard Statistics</h1>
-                    <div className={styles.carouselContainer}>
+                    <div className='flex-1 flex'>
+                        {leaderboardData && <Carousel {...leaderboardData} />}
+                    </div>
+                    {/* <div className={styles.carouselContainer}>
                         <div className={styles.carouselTrack}>
                             {leaderboardData && [...Array(2)].map((_, i) => (
                                 <React.Fragment key={i}>
@@ -413,7 +417,7 @@ const Leaderboard: React.FC = () => {
                                 </React.Fragment>
                             ))}
                         </div>
-                    </div>
+                    </div> */}
                 </div>
                 <div className='row-span-2 flex flex-col'>
                     <div ref={ref1} className='flex-grow overflow-y-hidden custom-scrollbar'>
