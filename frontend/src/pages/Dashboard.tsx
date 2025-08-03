@@ -1,27 +1,32 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { Outlet } from "react-router"
-import { Layout, Menu, theme, Input, Button, Statistic, Space } from 'antd';
-import type { StatisticTimerProps } from 'antd';
+import { Layout, Menu, theme, Statistic } from 'antd';
 import { useNavigate, useLocation } from 'react-router';
+
 import { AiFillGithub } from "react-icons/ai";
 import { MdSpaceDashboard } from "react-icons/md";
-import { IoMdStats } from "react-icons/io";
 import { MdPersonAddAlt1 } from "react-icons/md";
-import { MdDarkMode } from "react-icons/md";
-import { IoMdSearch } from "react-icons/io";
-import { SearchOutlined } from '@ant-design/icons';
+import { IoMdStats } from "react-icons/io";
+import DarkmodeButton from '../components/DarkmodeButton';
+
+
+import Search from '../components/SearchBar';
+import { SearchProvider, SearchContext } from '../context/SearchContext';
 
 const { Header, Content, Sider } = Layout;
 
-const Dashboard: React.FC = () => {
-    const {
-        token: { colorBgContainer, borderRadiusLG },
-    } = theme.useToken();
+const DashboardContent: React.FC = () => {
 
     const { Timer } = Statistic;
     const deadline = Date.now() + 1000 * 60 * 5;
     const navigate = useNavigate();
     const location = useLocation();
+    const searchContext = useContext(SearchContext);
+
+    if (!searchContext) {
+        throw new Error('useSearch must be used within a SearchProvider');
+    }
+    const { setSearchTerm } = searchContext;
 
     const routes: { [key: string]: string } = {
         '1': '/',
@@ -38,14 +43,14 @@ const Dashboard: React.FC = () => {
         }
     };
 
-    // On countdown finish 
-    const onFinish: StatisticTimerProps['onFinish'] = () => {
-        console.log('finished!');
-    };
+    const {
+        token: { colorBgContainer, borderRadiusLG, colorBorder },
+    } = theme.useToken();
+
 
     return (
         <Layout className='h-screen'>
-            <Header className='bg-[#111111] items-center flex gap-3 px-[20px] justify-between'>
+            <Header style={{ background: colorBgContainer, borderBottom: `1px solid ${colorBorder}` }} className='items-center flex gap-3 px-[20px] justify-between'>
                 <div className='flex items-center gap-5 w-full'>
                     <span className='flex items-center gap-1.5 px-1'>
                         <AiFillGithub className='text-[22px]' />
@@ -53,11 +58,7 @@ const Dashboard: React.FC = () => {
                     </span>
                     <span className='flex w-full gap-2'>
                         {location.pathname === '/' && (
-                            <>
-                                <Input style={{ width: 'calc(50% - 85px)' }} className='min-w-[150px]' placeholder='Search by name or username' />
-                                <Button type='text' className={`p-2 flex whitespace-nowrap w-min gap-1 bg-[--button-bg]`} iconPosition='end' size="middle" icon={<SearchOutlined className='text-[16px]' />}>Search
-                                </Button>
-                            </>
+                            <Search onSubmit={e => { setSearchTerm(e) }} />
                         )}
                     </span>
                 </div>
@@ -68,9 +69,7 @@ const Dashboard: React.FC = () => {
                         <Timer type='countdown' value={deadline} format="m:ss" valueStyle={{ fontSize: 12 }}></Timer>
                     </div>
                     {/* Darkmode Button */}
-                    <Button className='h-[32px] w-[32px] p-0 bg-[--dark-gray]'>
-                        <MdDarkMode className='text-[20px]' />
-                    </Button>
+                    <DarkmodeButton />
                 </div>
             </Header>
             <Layout
@@ -111,4 +110,11 @@ const Dashboard: React.FC = () => {
     );
 };
 
+const Dashboard: React.FC = () => {
+    return (
+        <SearchProvider>
+            <DashboardContent />
+        </SearchProvider>
+    );
+};
 export default Dashboard;
