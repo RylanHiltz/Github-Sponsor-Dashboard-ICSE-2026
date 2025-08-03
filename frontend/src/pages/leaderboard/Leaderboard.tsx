@@ -7,12 +7,11 @@ import { createStyles } from 'antd-style';
 
 // Type imports 
 import type { TableProps, TablePaginationConfig } from 'antd';
-import type { LeaderboardUser } from '../../types/LeaderboardUserModel';
+import type { LeaderboardUser, Location, LeaderboardStatsData } from '../../types/LeaderboardUserModel';
 import type { ColumnsType } from 'antd/es/table';
 import type { FilterValue, SortOrder } from 'antd/es/table/interface';
 
 import { SearchContext } from '../../context/SearchContext';
-
 
 const useStyle = createStyles(({ css, prefixCls }) => {
     return {
@@ -26,7 +25,6 @@ const useStyle = createStyles(({ css, prefixCls }) => {
             scrollbar-gutter: stable;
           }
         }
-
         /* Add this rule to prevent header text from wrapping */
         .${prefixCls}-table-thead > tr > th {
           white-space: nowrap;
@@ -39,26 +37,6 @@ const useStyle = createStyles(({ css, prefixCls }) => {
     };
 });
 
-interface Location {
-    text: string,
-    value: string
-}
-
-interface LeaderboardStatsData {
-    total_users: number;
-    total_sponsorships: number;
-    top_sponsored: {
-        username: string;
-        avatar_url: string;
-        total_sponsors: number;
-    };
-    top_sponsoring: {
-        username: string;
-        avatar_url: string;
-        total_sponsoring: number;
-    };
-}
-
 const Leaderboard: React.FC = () => {
 
     // Navigation handle for user pages
@@ -70,11 +48,8 @@ const Leaderboard: React.FC = () => {
     const ref1 = useRef<HTMLDivElement | null>(null)
     const [loading, setLoading] = useState(false);
 
-    // Table data consts
     const [users, setUsers] = useState<LeaderboardUser[]>([]);
-    const [filters, setFilters] = useState<Record<string, FilterValue | null>>({});
     const [locationFilters, setLocationFilters] = useState<Location[]>([])
-    const [sorters, setSorters] = useState<Record<string, SortOrder | null>>({});
     const [leaderboardData, setLeaderboardData] = useState<LeaderboardStatsData | null>(null);
 
     const searchContext = useContext(SearchContext);
@@ -83,12 +58,14 @@ const Leaderboard: React.FC = () => {
     }
     const { searchTerm } = searchContext;
 
-    // Default pagination values
+    // Table data consts
     const [pagination, setPagination] = useState<TablePaginationConfig>({
         current: 1,
         pageSize: 10,
         total: 0,
     });
+    const [filters, setFilters] = useState<Record<string, FilterValue | null>>({});
+    const [sorters, setSorters] = useState<Record<string, SortOrder | null>>({});
 
     const fetchUsers = async (
         currentPagination: TablePaginationConfig,
@@ -105,7 +82,6 @@ const Leaderboard: React.FC = () => {
         // Check if search term has been provided
         if (searchTerm) {
             queryParams.append("search", searchTerm);
-            console.log(searchTerm);
         }
 
         Object.entries(currentFilters).forEach(([key, value]) => {
@@ -181,29 +157,6 @@ const Leaderboard: React.FC = () => {
             console.error("Error fetching leaderboard stats:", error);
         }
     };
-
-
-    useEffect(() => {
-        getLeaderboardStats();
-        getLocations();
-    }, []);
-
-
-    useEffect(() => {
-        // When a new search is performed, filters or sorters are changed, reset to page 1
-        if (pagination.current !== 1) {
-            setPagination(prev => ({ ...prev, current: 1 }));
-        } else {
-            // Otherwise, fetch users with the current state
-            fetchUsers(pagination, filters, sorters);
-        }
-    }, [searchTerm, filters, sorters]);
-
-    useEffect(() => {
-        fetchUsers(pagination, filters, sorters);
-
-    }, [pagination.current, pagination.pageSize, filters, sorters,]);
-
 
     const columns: ColumnsType<LeaderboardUser> = [
         {
@@ -386,12 +339,33 @@ const Leaderboard: React.FC = () => {
 
     useLayoutEffect(() => {
         getDynamicHeight();
-
         window.addEventListener('resize', getDynamicHeight);
         return () => {
             window.removeEventListener('resize', getDynamicHeight);
         }
     }, []);
+
+    useEffect(() => {
+        getLeaderboardStats();
+        getLocations();
+    }, []);
+
+
+    useEffect(() => {
+        // When a new search is performed, filters or sorters are changed, reset to page 1
+        if (pagination.current !== 1) {
+            setPagination(prev => ({ ...prev, current: 1 }));
+        } else {
+            // Otherwise, fetch users with the current state
+            fetchUsers(pagination, filters, sorters);
+        }
+    }, [searchTerm, filters, sorters]);
+
+    useEffect(() => {
+        fetchUsers(pagination, filters, sorters);
+
+    }, [pagination.current, pagination.pageSize, filters, sorters,]);
+
 
     return (
         <>
