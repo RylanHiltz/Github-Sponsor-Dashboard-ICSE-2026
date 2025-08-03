@@ -1,7 +1,6 @@
-import { useEffect, useState, useRef, useLayoutEffect, } from 'react'
-import React from 'react';
+import React, { useEffect, useState, useRef, useLayoutEffect, useContext } from 'react'
 import styles from './Leaderboard.module.css'
-import { Button, Table, Pagination } from 'antd';
+import { Table, Pagination } from 'antd';
 import { useNavigate } from 'react-router';
 import { apiUrl } from '../../api';
 import { createStyles } from 'antd-style';
@@ -11,6 +10,8 @@ import type { TableProps, TablePaginationConfig } from 'antd';
 import type { LeaderboardUser } from '../../types/LeaderboardUserModel';
 import type { ColumnsType } from 'antd/es/table';
 import type { FilterValue, SortOrder } from 'antd/es/table/interface';
+
+import { SearchContext } from '../../context/SearchContext';
 
 
 const useStyle = createStyles(({ css, prefixCls }) => {
@@ -76,6 +77,11 @@ const Leaderboard: React.FC = () => {
     const [sorters, setSorters] = useState<Record<string, SortOrder | null>>({});
     const [leaderboardData, setLeaderboardData] = useState<LeaderboardStatsData | null>(null);
 
+    const searchContext = useContext(SearchContext);
+    if (!searchContext) {
+        throw new Error('Leaderboard must be used within a SearchProvider');
+    }
+    const { searchTerm } = searchContext;
 
     // Default pagination values
     const [pagination, setPagination] = useState<TablePaginationConfig>({
@@ -83,7 +89,6 @@ const Leaderboard: React.FC = () => {
         pageSize: 10,
         total: 0,
     });
-
 
     const fetchUsers = async (
         currentPagination: TablePaginationConfig,
@@ -96,6 +101,12 @@ const Leaderboard: React.FC = () => {
             page: (currentPagination.current || 1).toString(),
             per_page: (currentPagination.pageSize || 10).toString(),
         });
+
+        // Check if search term has been provided
+        if (searchTerm) {
+            queryParams.append("search", searchTerm);
+            console.log(searchTerm);
+        }
 
         Object.entries(currentFilters).forEach(([key, value]) => {
             // Safely handle null/undefined filter values from Ant Design
@@ -139,25 +150,12 @@ const Leaderboard: React.FC = () => {
         }
     };
 
-    useEffect(() => {
-        getLeaderboardStats();
-    }, []);
-
-    useEffect(() => {
-        fetchUsers(pagination, filters, sorters);
-        getLocations();
-
-    }, [pagination.current, pagination.pageSize, filters, sorters]);
-
-
     async function getLocations() {
         try {
             const response = await fetch(`${apiUrl}/api/users/location`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const data = await response.json();
-            console.log(data)
-
             const locationData = data.map((location: string) => ({
                 text: location,
                 value: location,
@@ -176,13 +174,36 @@ const Leaderboard: React.FC = () => {
 
             const data: LeaderboardStatsData = await response.json();
 
-            setLeaderboardData(data);
             setTimeout(getLeaderboardStats, 15000);
+            setLeaderboardData(data);
 
         } catch (error) {
             console.error("Error fetching leaderboard stats:", error);
         }
     };
+
+
+    useEffect(() => {
+        getLeaderboardStats();
+        getLocations();
+    }, []);
+
+
+    useEffect(() => {
+        // When a new search is performed, filters or sorters are changed, reset to page 1
+        if (pagination.current !== 1) {
+            setPagination(prev => ({ ...prev, current: 1 }));
+        } else {
+            // Otherwise, fetch users with the current state
+            fetchUsers(pagination, filters, sorters);
+        }
+    }, [searchTerm, filters, sorters]);
+
+    useEffect(() => {
+        fetchUsers(pagination, filters, sorters);
+
+    }, [pagination.current, pagination.pageSize, filters, sorters,]);
+
 
     const columns: ColumnsType<LeaderboardUser> = [
         {
@@ -192,7 +213,6 @@ const Leaderboard: React.FC = () => {
             width: 115,
             sortDirections: ["descend", "ascend"],
             sorter: true,
-            // You can access any property from the record in the render function:
             render: (_: any, record: LeaderboardUser) => (
                 <>
                     <span className='flex items-center gap-1'>
@@ -203,7 +223,7 @@ const Leaderboard: React.FC = () => {
             ),
             onCell: () => ({
                 style: {
-                    whiteSpace: 'normal', // Allow wrapping for this column
+                    whiteSpace: 'normal',
                     textOverflow: "hidden",
                 },
             }),
