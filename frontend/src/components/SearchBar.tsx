@@ -19,7 +19,7 @@ const Search: React.FC<SearchProps> = ({ onSubmit }) => {
                         onSubmit(search);
                     }
                 }} />
-            <Button type='text' className={`p-2 flex whitespace-nowrap w-min gap-1 bg-[--button-bg]`} iconPosition='end' size="middle" icon={<SearchOutlined className='text-[16px]' />} onClick={() => onSubmit(search)}>Search</Button >
+            <Button type='text' className={`p-2 flex whitespace-nowrap w-min gap-1`} iconPosition='end' size="middle" icon={<SearchOutlined className='text-[16px]' />} onClick={() => onSubmit(search)}>Search</Button >
         </>
     )
 }

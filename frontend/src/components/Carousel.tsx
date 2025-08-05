@@ -21,7 +21,7 @@ const Carousel = (data: LeaderboardStatsData | null) => {
             spaceBetween={20}
             slidesPerView={4}
             loop={true} // Enable looping
-            speed={12000}
+            speed={10000}
             autoplay={{
                 delay: 0,
                 disableOnInteraction: false,
