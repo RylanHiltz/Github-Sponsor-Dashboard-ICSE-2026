@@ -1,17 +1,16 @@
 import React, { useContext } from 'react';
-import { Outlet } from "react-router"
+import { useNavigate, useLocation, Outlet } from 'react-router';
 import { Layout, Menu, theme, Statistic } from 'antd';
-import { useNavigate, useLocation } from 'react-router';
-
-import { AiFillGithub } from "react-icons/ai";
-import { MdSpaceDashboard } from "react-icons/md";
-import { MdPersonAddAlt1 } from "react-icons/md";
-import { IoMdStats } from "react-icons/io";
-import DarkmodeButton from '../components/DarkmodeButton';
-
-
 import Search from '../components/SearchBar';
 import { SearchProvider, SearchContext } from '../context/SearchContext';
+import DarkmodeButton from '../components/DarkmodeButton';
+
+import { AiFillGithub } from "react-icons/ai";
+import { MdBorderColor, MdSpaceDashboard } from "react-icons/md";
+import { MdPersonAddAlt1 } from "react-icons/md";
+import { IoMdStats } from "react-icons/io";
+
+
 
 const { Header, Content, Sider } = Layout;
 
@@ -44,7 +43,7 @@ const DashboardContent: React.FC = () => {
     };
 
     const {
-        token: { colorBgContainer, borderRadiusLG, colorBorder },
+        token: { colorBgContainer, borderRadiusLG, colorBorder, colorBorderSecondary },
     } = theme.useToken();
 
 
@@ -64,7 +63,7 @@ const DashboardContent: React.FC = () => {
                 </div>
                 <div className='flex gap-3 pr-[20px] items-center'>
                     {/* Timer */}
-                    <div className='border-[#303030] border-[1px] flex items-center p-2 rounded-md bg-[--dark-gray] h-[32px]'>
+                    <div className={`border-[1px] flex items-center p-2 rounded-md h-[32px]`} style={{ borderColor: colorBorder }}>
                         <p className='text-[12px] font-medium select-none whitespace-nowrap'>Refresh in&nbsp;</p>
                         <Timer type='countdown' value={deadline} format="m:ss" valueStyle={{ fontSize: 12 }}></Timer>
                     </div>
@@ -106,7 +105,7 @@ const DashboardContent: React.FC = () => {
                     <Outlet />
                 </Content>
             </Layout>
-        </Layout>
+        </Layout >
     );
 };
 
