@@ -20,16 +20,14 @@ def get_users():
         page = int(request.args.get("page", 1))
         per_page = int(request.args.get("per_page", 10))
         offset = (page - 1) * per_page
-
+        # Search field passed in from the frontend to preform database search
         search_query = request.args.get("search", "")
-
         # Filters passed in from the frontend to query the user data
         filters = {
             "gender": request.args.getlist("gender"),
             "type": request.args.getlist("type"),
             "location": request.args.getlist("location"),
         }
-
         # Sorters passed in from the frontend to sort user data
         sort_fields = request.args.getlist("sortField")
         sort_orders = request.args.getlist("sortOrder")
@@ -52,13 +50,16 @@ def get_users():
 
         # Handle search query
         if search_query:
-            where_clauses.append("(u.username ILIKE %s OR u.name ILIKE %s)")
-            params.extend([f"%{search_query}%", f"%{search_query}%"])
+            # Combine name and username into a searchable vector
+            # Use plainto_tsquery for user input to handle multiple words safely
+            where_clauses.append(
+                "to_tsvector('english', u.username || ' ' || u.name) @@ plainto_tsquery('english', %s)"
+            )
+            params.append(search_query)
 
         # Handle filters
         for key, values in filters.items():
             if values:
-                # Handle 'None' from frontend for NULL values in DB
                 if "None" in values:
                     values.remove("None")
                     if values:
@@ -72,7 +73,8 @@ def get_users():
                     params.extend(values)
 
         # Append is_enriched at the end to only query for users who have full profiles
-        where_clauses.append(f"u.is_enriched IS TRUE")
+        where_clauses.append("u.is_enriched IS TRUE")
+        where_clauses.append("(sc.total_sponsors > 0 OR sc.total_sponsoring > 0)")
         where_clause = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
         # Handle column sorters
@@ -82,91 +84,113 @@ def get_users():
                 col_name = sortable_fields[field]
                 order = "ASC" if sort_orders[i] == "ascend" else "DESC"
                 order_by_parts.append(f"{col_name} {order}")
+
+        # TODO: attempt to see if this can be better done for filtering while doing search
         # Create the order clause to pass into the data query
+        if order_by_parts:
+            if search_query:
+                # Prioritize matches for username or name when a search query is active
+                priority_order = f"""
+                CASE
+                    WHEN u.username ILIKE '{search_query}' THEN 1
+                    WHEN u.name ILIKE '{search_query}' THEN 2
+                    WHEN u.username ILIKE '{search_query}%' THEN 3
+                    WHEN u.name ILIKE '{search_query}%' THEN 4
+                    ELSE 5
+                END
+                """
+                order_by_parts.insert(0, priority_order)
+            order_clause = {f"ORDER BY {', '.join(order_by_parts)}"}
+
         order_clause = (
-            f"ORDER BY  {', '.join(order_by_parts)}"
+            f"ORDER BY {', '.join(order_by_parts)}"
             if order_by_parts
             else "ORDER BY sc.total_sponsors DESC"
         )
 
-        # Query for total count with filters
-        count_query = f"SELECT COUNT(DISTINCT u.id) FROM users u {where_clause}"
-        print(count_query)
-        cur.execute(count_query, tuple(params))
-        total_count = cur.fetchone()["count"]
-
-        median_query = """
-        SELECT 
-            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY min_sponsor_cost) 
-            AS median_sponsor_cost
-        FROM users
-        WHERE min_sponsor_cost > 0;
-        """
-        cur.execute(median_query)
-        monthly_median = cur.fetchone()["median_sponsor_cost"]
-
+        # Optizimed query to fetch all necessary data, while handling filtering and searching via the backend
         data_query = f"""
+        -- Handles counting bi-directional sponsorships for each user who is enriched
+        WITH sponsorship_counts AS (
+            SELECT 
+            u.id AS user_id,
+            COALESCE(COUNT(DISTINCT s1.sponsor_id), 0) + 
+            COALESCE(u.private_sponsor_count, 0) AS total_sponsors,
+            COALESCE((
+                SELECT COUNT(DISTINCT s2.sponsored_id)
+                FROM sponsorship s2
+                WHERE s2.sponsor_id = u.id
+            ), 0) AS total_sponsoring
+            FROM users u
+            LEFT JOIN sponsorship s1 ON s1.sponsored_id = u.id
+            GROUP BY u.id, u.private_sponsor_count
+        ),
+        
+        -- Grabs the median minimum sponsorship cost from the users table for calculation of estimated earnings 
+        median_cost AS (
+            SELECT 
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY min_sponsor_cost) AS value
+            FROM users
+            WHERE min_sponsor_cost > 0
+        )
+        
+        -- Selects all attributes to be displayed in the leaderboard from the users table
         SELECT 
             u.id, u.name, u.username, u.type, u.avatar_url, u.profile_url,
             u.gender, u.location, u.public_repos, u.public_gists,
             u.followers, u.following, u.hireable, u.min_sponsor_cost, 
             sc.total_sponsors,
             sc.total_sponsoring,
-            -- Use a CASE statement to handle users with a min_sponsor_cost of 0 or NULL
-            (
-                LEAST(
-                    (CASE WHEN u.min_sponsor_cost > 0 THEN u.min_sponsor_cost ELSE {monthly_median} END), 
-                    {monthly_median}
-                ) * sc.total_sponsors
-            ) AS estimated_earnings
+            ( 
+            
+            -- Checks if the users minimum sponsorship price is greater than 0, if so use that value, else use median
+            -- If the users minimum sponsorship price is greater than the median, the median is substituted for the price
+            -- This is multiplied by the total # of sponsors to get the estimated MINIMUM monthly earnings the user earns
+            LEAST(
+                (CASE WHEN u.min_sponsor_cost > 0 THEN u.min_sponsor_cost ELSE mc.value END), 
+                mc.value
+            ) * sc.total_sponsors
+            ) AS estimated_earnings,
+            COUNT(*) OVER() AS total_count
         FROM users u
-        LEFT JOIN (
-            SELECT 
-                u.id AS user_id,
-                COALESCE(COUNT(DISTINCT s1.sponsor_id), 0) + 
-                COALESCE(u.private_sponsor_count, 0) AS total_sponsors,
-                COALESCE((
-                    SELECT COUNT(DISTINCT s2.sponsored_id)
-                    FROM sponsorship s2
-                    WHERE s2.sponsor_id = u.id
-                ), 0) AS total_sponsoring
-            FROM users u
-            LEFT JOIN sponsorship s1 ON s1.sponsored_id = u.id
-            GROUP BY u.id, u.private_sponsor_count
-        ) sc ON sc.user_id = u.id
-        {where_clause}
-        {order_clause}
+        JOIN sponsorship_counts sc ON sc.user_id = u.id
+        CROSS JOIN median_cost mc
+            {where_clause}
+            {order_clause}
         LIMIT %s OFFSET %s;
         """
 
         final_params = params + [per_page, offset]
         cur.execute(data_query, tuple(final_params))
-
         rows = cur.fetchall()
-        ordered_users = []
-        for row in rows:
-            ordered_users.append(
-                {
-                    "id": row["id"],
-                    "name": row["name"],
-                    "username": row["username"],
-                    "type": row["type"],
-                    "gender": row["gender"],
-                    "hireable": row["hireable"],
-                    "location": row["location"],
-                    "avatar_url": row["avatar_url"],
-                    "profile_url": row["profile_url"],
-                    "following": row["following"],
-                    "followers": row["followers"],
-                    "public_repos": row["public_repos"],
-                    "public_gists": row["public_gists"],
-                    "total_sponsors": row["total_sponsors"],
-                    "total_sponsoring": row["total_sponsoring"],
-                    "min_sponsor_cost": row["min_sponsor_cost"],
-                    "estimated_earnings": row["estimated_earnings"],
-                }
-            )
 
+        total_count = 0
+        ordered_users = []
+        if rows:
+            # The total_count is the same for every row, so we can grab it from the first one.
+            total_count = rows[0]["total_count"]
+            for row in rows:
+                ordered_users.append(
+                    {
+                        "id": row["id"],
+                        "name": row["name"],
+                        "username": row["username"],
+                        "type": row["type"],
+                        "gender": row["gender"],
+                        "hireable": row["hireable"],
+                        "location": row["location"],
+                        "avatar_url": row["avatar_url"],
+                        "profile_url": row["profile_url"],
+                        "following": row["following"],
+                        "followers": row["followers"],
+                        "public_repos": row["public_repos"],
+                        "public_gists": row["public_gists"],
+                        "total_sponsors": row["total_sponsors"],
+                        "total_sponsoring": row["total_sponsoring"],
+                        "min_sponsor_cost": row["min_sponsor_cost"],
+                        "estimated_earnings": row["estimated_earnings"],
+                    }
+                )
         response_data = {
             "total": total_count,
             "users": ordered_users,
@@ -177,11 +201,11 @@ def get_users():
         return jsonify({"error": str(e)}), 500
 
 
+# Endpoint to retrieve a list of unique country locations sorted alphabetically
 @users_bp.route("/api/users/location", methods=["GET"])
 def get_locations():
     """
     Fetches a distinct, sorted list of user locations.
-    This query is optimized for PostgreSQL if an index exists on the `location` column.
     The database query planner should use a 'skip scan' on the index for efficiency.
     """
     try:
@@ -197,6 +221,7 @@ def get_locations():
         return jsonify({"error": str(e)}), 500
 
 
+#
 @users_bp.route("/api/user/<int:user_id>", methods=["GET"])
 def get_user(user_id):
 
@@ -262,7 +287,6 @@ def get_user(user_id):
         conn.close()
 
         if user_data and user_data["user_data"]:
-            # Combine user data and activity data into a single dictionary
             response_data = user_data["user_data"]
             if user_data["activity_data"]:
                 response_data.update(user_data["activity_data"])
