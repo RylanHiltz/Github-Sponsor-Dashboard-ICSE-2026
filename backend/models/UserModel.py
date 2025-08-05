@@ -31,26 +31,29 @@ class UserModel:
     @classmethod
     def from_api(cls, data: dict):
         return cls(
-            github_id=data["id"],
+            github_id=data["databaseId"],
             username=data["login"],
             name=data["name"],
-            type=data["type"],
+            type=data["__typename"],
             has_pronouns=data.get("has_pronouns", False),
             gender=None,
             location=data["location"],
-            avatar_url=data["avatar_url"],
-            profile_url=data["html_url"],
+            avatar_url=data["avatarUrl"],
+            profile_url=data["url"],
             company=data.get("company"),
-            following=data["following"],
-            followers=data["followers"],
-            hireable=data.get("hireable"),
+            following=data["following"]["totalCount"],
+            followers=data["followers"]["totalCount"],
+            hireable=data.get("isHireable"),
             bio=data.get("bio"),
-            public_repos=data["public_repos"],
-            public_gists=data["public_gists"],
-            twitter_username=data.get("twitter_username"),
+            public_repos=(
+                data["originalRepositories"]["totalCount"]
+                + data["forkedRepositories"]["totalCount"]
+            ),
+            public_gists=data["gists"]["totalCount"],
+            twitter_username=data.get("twitterUsername"),
             email=data.get("email"),
             private_sponsor_count=0,
             last_scraped=None,
             is_enriched=None,
-            github_created_at=data["created_at"],
+            github_created_at=data["createdAt"],
         )
