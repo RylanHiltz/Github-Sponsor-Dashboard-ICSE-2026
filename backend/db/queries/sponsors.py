@@ -41,26 +41,27 @@ def createSponsoring(sponsor, sponsored_arr, db):
     return
 
 
+# * REFACTORED FOR GITHUB ID
 # Handles comparison logic between old sponsors and newly crawled, removing where applicable
-def syncSponsors(user_id, scraped_sponsors, db):
+def syncSponsors(user_id, latest_sponsor_ids, db):
     with db.cursor() as cur:
         cur.execute(
             """
-            SELECT u.username
+            SELECT u.github_id
             FROM sponsorship s
             JOIN users u ON u.id = s.sponsor_id
             WHERE s.sponsored_id = %s
             """,
             (user_id,),
         )
-        current_sponsors = {row[0] for row in cur.fetchall()}
+        existing_sponsors = {row[0] for row in cur.fetchall()}
 
-    scraped_sponsors = set(scraped_sponsors)
+    latest_sponsor_ids = set(latest_sponsor_ids)
 
     # Sponsors who exist in the DB, but who are not currently sponsoring the user
-    sponsors_to_remove = current_sponsors - scraped_sponsors
+    sponsors_to_remove = existing_sponsors - latest_sponsor_ids
     # Sponsors who exist in the scraped list, but have not been added to DB
-    sponsors_to_add = scraped_sponsors - current_sponsors
+    sponsors_to_add = latest_sponsor_ids - existing_sponsors
 
     # Remove old sponsors
     if sponsors_to_remove:
@@ -69,7 +70,7 @@ def syncSponsors(user_id, scraped_sponsors, db):
                 """
                 DELETE FROM sponsorship
                 WHERE sponsored_id = %s AND sponsor_id IN (
-                    SELECT id FROM users WHERE username = ANY(%s)
+                    SELECT id FROM users WHERE github_id = ANY(%s)
                 )
                 """,
                 (user_id, list(sponsors_to_remove)),
@@ -83,26 +84,27 @@ def syncSponsors(user_id, scraped_sponsors, db):
     return
 
 
+# * REFACTORED FOR GITHUB ID
 # Handles comparison logic between old sponsored users and newly crawled, removing where applicable
-def syncSponsorships(user_id, scraped_sponsoring, db):
+def syncSponsorships(user_id, latest_sponsored_ids, db):
     with db.cursor() as cur:
         cur.execute(
             """
-            SELECT u.username
+            SELECT u.github_id
             FROM sponsorship s
             JOIN users u ON u.id = s.sponsored_id
             WHERE s.sponsor_id = %s
             """,
             (user_id,),
         )
-        current_sponsoring = {row[0] for row in cur.fetchall()}
+        existing_sponsored = {row[0] for row in cur.fetchall()}
 
-    scraped_sponsoring = set(scraped_sponsoring)
+    latest_sponsored_ids = set(latest_sponsored_ids)
 
     # Sponsored users who exist in the DB, but who are not currently being sponsored anymore
-    sponsoring_to_remove = current_sponsoring - scraped_sponsoring
+    sponsoring_to_remove = existing_sponsored - latest_sponsored_ids
     # Sponsored users who exist in the scraped list, but have not been added to DB
-    sponsoring_to_add = scraped_sponsoring - current_sponsoring
+    sponsoring_to_add = latest_sponsored_ids - existing_sponsored
 
     # Remove old sponsored users
     if sponsoring_to_remove:
@@ -111,7 +113,7 @@ def syncSponsorships(user_id, scraped_sponsoring, db):
                 """
                 DELETE FROM sponsorship
                 WHERE sponsor_id = %s AND sponsored_id IN (
-                    SELECT id FROM users WHERE username = ANY(%s)
+                    SELECT id FROM users WHERE github_id = ANY(%s)
                 )
                 """,
                 (user_id, list(sponsoring_to_remove)),

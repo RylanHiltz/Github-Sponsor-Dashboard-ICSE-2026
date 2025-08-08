@@ -8,6 +8,7 @@ import psycopg2
 # DB Queries
 from backend.db.queries.queue import (
     getFirstInQueue,
+    # batchGetQueue,
     batchAddQueue,
     updateStatus,
     enqueueStaleUsers,
@@ -35,7 +36,7 @@ import time
 
 from backend.logs.logger_config import init_logger, log_header
 
-MAX_DEPTH = 4
+MAX_DEPTH = 6
 
 
 class ScraperWorker:
@@ -64,6 +65,7 @@ class ScraperWorker:
                 enqueueStaleUsers(conn, days_old=14)
                 last_stale_check = time.time()
                 # Re-establish DB connection every 4 hours
+                conn.close()
                 conn = db_connection()
                 logging.info(
                     "4 Hours Elapsed: Re-establishing Fresh Database Connection."
@@ -76,20 +78,23 @@ class ScraperWorker:
                     time.sleep(5)
                     continue
 
-                username = data["username"]
+                github_id = data["github_id"]
                 depth = data["depth"]
-                log_header(f"SCRAPING CURRENT USER: {username} ")
-                print(f"\n\nProcessing user: {username} at depth: {depth}")
+
+                log_header(f"SCRAPING CURRENT USER: Github ID {github_id} ")
+                print(f"\n\nProcessing user: Github ID {github_id} at depth: {depth}")
 
                 # If the users depth exceeds MAX_DEPTH to crawl, skip the user and continue to next in queue
                 if depth > MAX_DEPTH:
-                    updateStatus(username, "skipped")
-                    logging.info(f"Skipped user: {username}, Max Depth Reached.")
+                    updateStatus(github_id, "skipped")
+                    logging.info(
+                        f"Skipped user: Github ID {github_id}, Max Depth Reached."
+                    )
                     continue
 
                 # Check if the user exists and if the user is enriched with REST API data
                 user_exists, is_enriched, user_id, identity_data = findUser(
-                    username=username, db=conn
+                    github_id=github_id, db=conn
                 )
                 print(user_exists, is_enriched, user_id, identity_data)
 
@@ -97,25 +102,29 @@ class ScraperWorker:
                     # User exists in DB from previous sponsor relation
                     if user_exists and is_enriched == False:
                         # Enrich user metadata from Github API / gender inference
-                        user = enrichUser(username, db=conn)
-                        logging.info(f"Processing User: {username} at depth: {depth}")
+                        user = enrichUser(github_id, db=conn)
+                        logging.info(
+                            f"Processing User: Github ID {github_id} at depth: {depth}"
+                        )
 
                     # User has already been scraped for their data once (prevents unwanted future updates)
                     elif user_exists and is_enriched == True:
                         user = enrichUser(
-                            username,
+                            github_id,
                             db=conn,
                             enriched=is_enriched,
                             identity=identity_data,
                         )
                         logging.info(
-                            f"User already enriched: {username} at depth: {depth}, Data has been refreshed."
+                            f"User already enriched: Github ID {github_id} at depth: {depth}, Data has been refreshed."
                         )
 
                     # User does not exist in DB, create new user
                     elif not user_exists:
-                        user, user_id = createUser(username, db=conn)
-                        logging.info(f"Creating User: {username} at depth: {depth}")
+                        user, user_id = createUser(github_id, db=conn)
+                        logging.info(
+                            f"Creating User: Github ID {github_id} at depth: {depth}"
+                        )
 
                 except ValueError as e:
                     logging.warning(
@@ -126,12 +135,13 @@ class ScraperWorker:
                 #  Crawl the user for sponsorship relations
                 print("Getting Sponsorships from GraphQL API:")
                 sponsors, sponsoring, private_count, min_sponsor_tier = (
-                    get_sponsorships(username, user.type)
+                    get_sponsorships(user.username, github_id, user.type)
                 )
 
-                # Create a list of only the unique usernames
+                # Create a list of only the unique github_ids
                 # This is important if bi-directional sponsor relations exist
                 unique_users = list(set(sponsors) | set(sponsoring))
+                print(unique_users)
 
                 # Batch create unique users who are not present in the table
                 batchAddQueue(unique_users, depth=(depth + 1), db=conn)
@@ -141,9 +151,10 @@ class ScraperWorker:
                 syncSponsors(user_id, sponsors, conn)
                 syncSponsorships(user_id, sponsoring, conn)
 
+                print(f"\nCollecting User Activity Data For: '{user.username}'")
                 # Collect the user activity from the Github API (potentially a lot of API requests)
                 getUserActivity(
-                    username=username,
+                    github_id=github_id,
                     user_id=user_id,
                     user_type=user.type,
                     created_at=user.github_created_at,
@@ -151,16 +162,17 @@ class ScraperWorker:
                 )
 
                 # Update staus of the crawled user
-                updateStatus(user=username, status="completed", db=conn)
+                updateStatus(github_id=github_id, status="completed", db=conn)
 
                 # Set last_scraped to the current time
-                finalizeUserScrape(username, private_count, min_sponsor_tier, conn)
+                finalizeUserScrape(github_id, private_count, min_sponsor_tier, conn)
 
                 # Print the elapsed time taken to crawl the current user
                 end = time.time()
                 elapsed = end - start
-                logging.info(f"user {username} crawled: {elapsed:.2f} seconds elapsed")
-
+                logging.info(
+                    f"user Github ID {github_id} crawled: {elapsed:.2f} seconds elapsed"
+                )
                 time.sleep(1)  # Wait before checking queue again
 
             # Handle operational error thrown by DB

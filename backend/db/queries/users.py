@@ -1,5 +1,5 @@
 # Database imports
-from backend.models.github_user import UserModel
+from backend.models.UserModel import UserModel
 from dotenv import load_dotenv
 import os
 import requests
@@ -9,25 +9,30 @@ from openai import OpenAI
 # Scraper imports
 from playwright.sync_api import sync_playwright
 
-from backend.utils.github_api import getRequest
+from backend.utils.github_api import getRequest, postRequest
 
 from backend.db.queries.queue import deleteFromQueue
 
 from datetime import datetime, timezone
+import base64
 import logging
 import re
 
 # Load sensitive variables
 load_dotenv()
-GITHUB_TOKEN = os.getenv("PAT")
+# GITHUB_TOKEN = os.getenv("PAT")
 EMAIL = os.getenv("email")
 API_KEY = os.getenv("API_KEY")
+URL = "https://api.github.com/graphql"
+
+
+# TODO: CHANGE ALL USER FUNCTION TO USE GITHUB_ID INSTEAD OF USERNAME
 
 
 # File for query logic that will be used/imported into the scraper
-def createUser(username, db):
+def createUser(github_id: int, db):
 
-    user = getUserData(username, db)
+    user = getUserData(github_id)
 
     with db.cursor() as cur:
         cur.execute(
@@ -56,7 +61,27 @@ def createUser(username, db):
                 github_created_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (username) DO NOTHING;
+            ON CONFLICT (github_id, username) DO UPDATE SET
+                username = EXCLUDED.username,
+                name = EXCLUDED.name,
+                type = EXCLUDED.type,
+                has_pronouns = EXCLUDED.has_pronouns,
+                gender = EXCLUDED.gender,
+                location = EXCLUDED.location,
+                avatar_url = EXCLUDED.avatar_url,
+                profile_url = EXCLUDED.profile_url,
+                company = EXCLUDED.company,
+                following = EXCLUDED.following,
+                followers = EXCLUDED.followers,
+                hireable = EXCLUDED.hireable,
+                bio = EXCLUDED.bio,
+                public_repos = EXCLUDED.public_repos,
+                public_gists = EXCLUDED.public_gists,
+                twitter_username = EXCLUDED.twitter_username,
+                email = EXCLUDED.email,
+                last_scraped = EXCLUDED.last_scraped,
+                is_enriched = EXCLUDED.is_enriched,
+                github_created_at = EXCLUDED.github_created_at;
             """,
             (
                 user.github_id,
@@ -85,26 +110,26 @@ def createUser(username, db):
         # Get the user id
         cur.execute(
             """
-            SELECT id FROM users WHERE username = %s;
+            SELECT id FROM users WHERE github_id = %s;
             """,
-            (username,),
+            (user.github_id,),
         )
         user_id = cur.fetchone()[0]
 
         db.commit()
         cur.close()
-        logging.info(f"Created user: {username}")
+        logging.info(f"Created or updated user with GitHub ID: {user.github_id}")
     # Returns the user object and user id to the worker
     return user, user_id
 
 
 # User already exists from previous sponsorship relation, run Github API request, collect and update user data
-def enrichUser(username, db, enriched=False, identity=None):
+def enrichUser(github_id: int, db, enriched=False, identity=None):
 
     if not enriched:
-        user = getUserData(username, db)
+        user = getUserData(github_id=github_id)
     else:
-        user = getUserData(username, db, enriched, identity)
+        user = getUserData(github_id=github_id, is_enriched=enriched, identity=identity)
 
     with db.cursor() as cur:
         cur.execute(
@@ -158,7 +183,7 @@ def enrichUser(username, db, enriched=False, identity=None):
         )
         db.commit()
         cur.close()
-        logging.info(f"Enriched user: {username}")
+        logging.info(f"Enriched user")
     # Returns the type of the user after getting metadata for scraping
     return user
 
@@ -182,19 +207,13 @@ def batchCreateUser(usernames, db):
     return
 
 
-# ! REFACTOR WITH ANOTHER CASE WHERE is_enriched IS FALSE AND TRUE TO MAKE SURE GENDER IS NOT REIMAGINED
-def getUserData(username, db, is_enriched=False, identity=None):
-    # from backend.db.queries.sponsors import notFoundWithSponsors
-
-    # Call Github REST API to get the metadata for user
-    url = f"https://api.github.com/users/{username}"
-
+def getUserData(github_id: int, is_enriched=False, identity=None):
+    # Call Github GraphQL API to get the user metadata
     try:
-        res = getRequest(url)
-        data = res.json()
+        data = getGithubData(github_id=github_id)
         user = UserModel.from_api(data)
 
-        if user.location != None:
+        if user.location is not None:
             user.location = getLocation(user.location)
 
         # If user type is User
@@ -206,7 +225,7 @@ def getUserData(username, db, is_enriched=False, identity=None):
                     user.gender = getGender(user.name, user.location)
                 user.is_enriched = True
                 return user
-            else:
+            if is_enriched:
                 # Data that should not be reset when refreshing data
                 user.gender = identity["gender"]
                 user.has_pronouns = identity["has_pronouns"]
@@ -221,16 +240,30 @@ def getUserData(username, db, is_enriched=False, identity=None):
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:
             logging.error(
-                f"{username} has changed usernames or no longer exists on github, Nuke user from DB."
+                f" has changed usernames or no longer exists on github, Nuke user from DB."
             )
-            deleteUser(username, db)
-            deleteFromQueue(username, db)
-            raise ValueError(f"User {username} not found on GitHub.")
+            # deleteUser(username, db)
+            # deleteFromQueue(username, db)
+            raise ValueError(f"User not found on GitHub.")
         else:
             logging.error(
-                f"Failed to fetch GitHub profile for {username}: {e.response.status_code} {e.response.text}"
+                f"Failed to fetch GitHub profile for: {e.response.status_code} {e.response.text}"
             )
             return None
+
+
+# Use GraphQL to query for users data based off their github ID
+def getGithubData(github_id: int):
+    try:
+        rest_url = f"https://api.github.com/user/{github_id}"
+        response = getRequest(url=rest_url)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logging.error(
+            f"An unexpected error occurred fetching user by ID {github_id}: {e}"
+        )
+    return None
 
 
 # Attempts to remove words that may confuse the location API to pull country of origin for user
@@ -272,6 +305,7 @@ def clean_location(location):
     return location.title()
 
 
+# TODO: Rename to like locationByImportance
 def get_most_important_location(locations):
     if not locations:
         return None
@@ -296,7 +330,6 @@ def getLocation(location):
                 country = get_most_important_location(data)
                 return country
             else:
-                # print(f"No location data found for '{location}'.")
                 logging.warning(f"No location data found for '{location}'.")
                 return None
         else:
@@ -394,12 +427,13 @@ def getGender(name, country):
     return gender
 
 
+# * REFACTORED FOR GITHUB ID
 # Runs a check if the user exists in the database an has already been visisted once
-def findUser(username, db):
+def findUser(github_id: int, db):
     with db.cursor() as cur:
         cur.execute(
-            "SELECT id, is_enriched FROM users WHERE username = %s LIMIT 1;",
-            (username,),
+            "SELECT id, is_enriched FROM users WHERE github_id = %s LIMIT 1;",
+            (github_id,),
         )
         row = cur.fetchone()
         print(row)
@@ -415,9 +449,9 @@ def findUser(username, db):
                     SELECT
                         gender,
                         has_pronouns
-                    FROM users WHERE username = %s LIMIT 1;
+                    FROM users WHERE github_id = %s LIMIT 1;
                     """,
-                    (username,),
+                    (github_id,),
                 )
                 row = cur.fetchone()
                 gender = row[0]
@@ -430,40 +464,42 @@ def findUser(username, db):
             return False, False, None, None
 
 
+# * REFACTORED FOR GITHUB ID
 # Returns an array of user id's mapped to the specific usernames
-def batchGetUserId(user_arr, db):
-
+def batchGetUserId(github_ids: list[int], db):
     with db.cursor() as cur:
         query = """
-            SELECT id, username 
+            SELECT id, github_id 
             FROM users 
-            WHERE username = ANY(%s)
+            WHERE github_id = ANY(%s)
         """
-        cur.execute(query, (user_arr,))
+        cur.execute(query, (github_ids,))
         rows = cur.fetchall()
         # Convert to a dict or list as needed
-        return [id for id, username in rows]
+        return [id for id, github_id in rows]
     return
 
 
+# * REFACTORED FOR GITHUB ID
 # Deletes a specfic user from the DB
-def deleteUser(user, db):
+def deleteUser(github_id: int, db):
     with db.cursor() as cur:
         cur.execute(
             """
             DELETE FROM users
-            WHERE username = %s;
+            WHERE github_id = %s;
             """,
-            (user,),
+            (github_id,),
         )
         db.commit()
         cur.close()
-        logging.info(f"Deleted {user} From Database")
+        logging.info(f"Deleted Github ID {github_id} From Database")
         return
 
 
+# * REFACTORED FOR GITHUB ID
 # Update last_scraped for the passed in user in the DB
-def finalizeUserScrape(username, private_count, min_sponsor_tier, db):
+def finalizeUserScrape(github_id: int, private_count, min_sponsor_tier, db):
 
     scraped = datetime.now(timezone.utc)
 
@@ -474,10 +510,75 @@ def finalizeUserScrape(username, private_count, min_sponsor_tier, db):
                 last_scraped = %s,
                 private_sponsor_count = %s,
                 min_sponsor_cost = %s     
-            WHERE username = %s;
+            WHERE github_id = %s;
             """,
-            (scraped, private_count, min_sponsor_tier, username),
+            (scraped, private_count, min_sponsor_tier, github_id),
         )
         db.commit()
         cur.close()
     return
+
+
+# def migrateUser(username, db):
+
+#     # First, try to find as a User
+#     query_template_user = """
+#     query($username: String!) {
+#         user(login: $username) {
+#             databaseId
+#             login
+#         }
+#     }
+#     """
+#     payload_user = {
+#         "query": query_template_user,
+#         "variables": {"username": username},
+#     }
+#     response = postRequest(url=URL, json=payload_user)
+#     data = response.json()
+#     entity_data = data.get("data", {}).get("user")
+
+#     # If not found as a User, try as an Organization
+#     if not entity_data:
+#         query_template_org = """
+#         query($username: String!) {
+#             organization(login: $username) {
+#                 databaseId
+#                 login
+#             }
+#         }
+#         """
+#         payload_org = {
+#             "query": query_template_org,
+#             "variables": {"username": username},
+#         }
+#         response = postRequest(url=URL, json=payload_org)
+#         data = response.json()
+#         entity_data = data.get("data", {}).get("organization")
+
+#     if not entity_data:
+#         logging.warning(
+#             f"Could not find user or organization {username} on GitHub during migration. Skipping."
+#         )
+#         return
+
+#     github_id = int(entity_data["databaseId"])
+#     print(data)
+
+#     try:
+#         with db.cursor() as cur:
+#             cur.execute(
+#                 """
+#                 UPDATE queue SET
+#                     github_id = %s
+#                 WHERE username = %s;
+#                 """,
+#                 (github_id, username),
+#             )
+#             db.commit()
+#             cur.close()
+#             print(f"id updated for {username}")
+#     except Exception as e:
+#         print("error occured:", e)
+#         raise ValueError(e)
+#     return

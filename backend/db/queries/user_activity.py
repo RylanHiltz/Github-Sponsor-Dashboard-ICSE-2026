@@ -1,6 +1,7 @@
 import requests
 from dotenv import load_dotenv
 import os
+import base64
 import logging
 from flask import jsonify
 import json
@@ -16,11 +17,12 @@ GITHUB_TOKEN = os.getenv("PAT")
 
 
 # Return the last year of user activity for the passed in user (PR, commits, issues)
-def getUserActivity(username, user_id, user_type, created_at, db=None):
+def getUserActivity(github_id, user_id, user_type, created_at, db=None):
 
     start = int(time.time())
 
     # Get year account was created from datetime string
+    node_id = base64.b64encode(f"04:User{github_id}".encode("utf-8")).decode("utf-8")
     dt = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ")
     creation_year = dt.year
     current_year = datetime.now().year
@@ -30,18 +32,21 @@ def getUserActivity(username, user_id, user_type, created_at, db=None):
         # If the user is type org, the account cannot have any of the specified user activities
         if user_type == "Organization":
             logging.info(
-                f"{username} is account type {user_type}, No user activity available to query."
+                f"Account is of type {user_type}, No user activity available to query."
             )
             return
 
-        log_section(f"Collecting User Activity Data For: {username} via GraphQL")
-        print(f"\nCollecting User Activity Data For: '{username}'")
-
+        log_section(f"Collecting User Activity Data via GraphQL")
         query_template = """
-        query($username: String!, $from: DateTime!, $to: DateTime!) {
-            user(login: $username) {
-                contributionsCollection(from: $from, to: $to) {
-                totalCommitContributions, totalPullRequestContributions, totalIssueContributions, totalPullRequestReviewContributions
+        query($node_id: ID!, $from: DateTime!, $to: DateTime!) {
+            node(id: $node_id) {
+                ... on User {
+                    contributionsCollection(from: $from, to: $to) {
+                        totalCommitContributions,
+                        totalPullRequestContributions,
+                        totalIssueContributions,
+                        totalPullRequestReviewContributions
+                    }
                 }
             }
         }
@@ -52,7 +57,7 @@ def getUserActivity(username, user_id, user_type, created_at, db=None):
 
                 from_date = f"{year}-01-01T00:00:00Z"
                 to_date = f"{year}-12-31T23:59:59Z"
-                variables = {"username": username, "from": from_date, "to": to_date}
+                variables = {"node_id": node_id, "from": from_date, "to": to_date}
 
                 query = {"query": query_template, "variables": variables}
 
@@ -62,12 +67,13 @@ def getUserActivity(username, user_id, user_type, created_at, db=None):
 
                 if "errors" in data:
                     logging.error(
-                        f"GraphQL Error for {username} ({year}): {data['errors']}"
+                        f"GraphQL Error for user at year ({year}): {data['errors']}"
                     )
                     continue  # Skip to the next year on error
 
+                # CORRECTED: Look for 'node' instead of 'user'
                 contributions = (
-                    data.get("data", {}).get("user", {}).get("contributionsCollection")
+                    data.get("data", {}).get("node", {}).get("contributionsCollection")
                 )
 
                 if contributions:
@@ -84,18 +90,17 @@ def getUserActivity(username, user_id, user_type, created_at, db=None):
                     }
                 else:
                     logging.warning(
-                        f"No contribution data for {username} in {year}. Inserting zero record."
+                        f"No contribution data for user in {year}. Inserting zero record."
                     )
                     stats = {
                         "commits": 0,
                         "pull_requests": 0,
                         "issues": 0,
-                        "code_reviews": 0,
+                        "reviews": 0,
                     }
 
                 # Convert the dictionary to a JSON string. This works for both JSON and JSONB columns.
                 stats_json = json.dumps(stats)
-                print(stats_json)
 
                 logging.info(f" -> Year {year}: {stats_json}")
 
@@ -112,10 +117,9 @@ def getUserActivity(username, user_id, user_type, created_at, db=None):
 
             except Exception as e:
                 logging.error(
-                    f"An unexpected error occurred for {username} ({year}): {e}"
+                    f"An unexpected error occurred for user at year ({year}): {e}"
                 )
                 continue  # Skip to next year
-
     db.commit()
     cur.close()
     end = int(time.time())
@@ -124,6 +128,7 @@ def getUserActivity(username, user_id, user_type, created_at, db=None):
     return
 
 
+# TODO add case where id already exists and delete the username that is currently being updated from users and queue
 def getTotalUserActivity(user_id, db):
 
     with db.cursor() as cur:
