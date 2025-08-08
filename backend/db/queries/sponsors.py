@@ -41,7 +41,6 @@ def createSponsoring(sponsor, sponsored_arr, db):
     return
 
 
-# * REFACTORED FOR GITHUB ID
 # Handles comparison logic between old sponsors and newly crawled, removing where applicable
 def syncSponsors(user_id, latest_sponsor_ids, db):
     with db.cursor() as cur:
@@ -84,7 +83,6 @@ def syncSponsors(user_id, latest_sponsor_ids, db):
     return
 
 
-# * REFACTORED FOR GITHUB ID
 # Handles comparison logic between old sponsored users and newly crawled, removing where applicable
 def syncSponsorships(user_id, latest_sponsored_ids, db):
     with db.cursor() as cur:

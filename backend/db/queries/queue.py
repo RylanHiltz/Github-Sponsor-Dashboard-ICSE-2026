@@ -27,7 +27,6 @@ GITHUB_TOKEN = os.getenv("PAT")
 #     return [row[0] for row in results]
 
 
-# * REFACTORED FOR GITHUB ID
 # Batch add an array of usernames to the queue for scraping
 def batchAddQueue(github_ids, depth, db):
 
@@ -47,7 +46,6 @@ def batchAddQueue(github_ids, depth, db):
     return
 
 
-# * REFACTORED FOR GITHUB ID
 # Gets the first user inside the queue who has status="pending"
 def getFirstInQueue(db):
     cur = db.cursor()
@@ -67,7 +65,6 @@ def getFirstInQueue(db):
     return None
 
 
-# * REFACTORED FOR GITHUB ID
 # Update the status of the passed in user in the DB
 def updateStatus(github_id: int, status, db):
     with db.cursor() as cur:
@@ -85,7 +82,6 @@ def updateStatus(github_id: int, status, db):
         return
 
 
-# * REFACTORED FOR GITHUB ID
 # Attempt to add a single username to the queue, check if the user is a real github user, and does not already exist
 # Makes a single GraphQL API request to check if 1) account exists, 2) account has > 0 sponsors OR sponsoring
 def addToQueue(username, db):
@@ -175,10 +171,8 @@ def deleteFromQueue(github_id, db):
         return
 
 
-# * REFACTORED FOR GITHUB ID
 # Update status of users to "pending" to crawl again if they exceed days_old created at time
 # Resets the created_at time to current time, enqueing them for scraping again (after current queue)
-# TODO: Change to github_id
 def enqueueStaleUsers(db, days_old):
     with db.cursor() as cur:
         cur.execute(

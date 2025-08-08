@@ -26,9 +26,6 @@ API_KEY = os.getenv("API_KEY")
 URL = "https://api.github.com/graphql"
 
 
-# TODO: CHANGE ALL USER FUNCTION TO USE GITHUB_ID INSTEAD OF USERNAME
-
-
 # File for query logic that will be used/imported into the scraper
 def createUser(github_id: int, db):
 
@@ -305,8 +302,7 @@ def clean_location(location):
     return location.title()
 
 
-# TODO: Rename to like locationByImportance
-def get_most_important_location(locations):
+def getLocationByImportance(locations):
     if not locations:
         return None
     best = max(locations, key=lambda x: x.get("importance", 0))
@@ -327,7 +323,7 @@ def getLocation(location):
         if res.status_code == 200:
             data = res.json()
             if data and "address" in data[0] and "country" in data[0]["address"]:
-                country = get_most_important_location(data)
+                country = getLocationByImportance(data)
                 return country
             else:
                 logging.warning(f"No location data found for '{location}'.")
@@ -427,7 +423,6 @@ def getGender(name, country):
     return gender
 
 
-# * REFACTORED FOR GITHUB ID
 # Runs a check if the user exists in the database an has already been visisted once
 def findUser(github_id: int, db):
     with db.cursor() as cur:
@@ -464,7 +459,6 @@ def findUser(github_id: int, db):
             return False, False, None, None
 
 
-# * REFACTORED FOR GITHUB ID
 # Returns an array of user id's mapped to the specific usernames
 def batchGetUserId(github_ids: list[int], db):
     with db.cursor() as cur:
@@ -480,7 +474,6 @@ def batchGetUserId(github_ids: list[int], db):
     return
 
 
-# * REFACTORED FOR GITHUB ID
 # Deletes a specfic user from the DB
 def deleteUser(github_id: int, db):
     with db.cursor() as cur:
@@ -497,7 +490,6 @@ def deleteUser(github_id: int, db):
         return
 
 
-# * REFACTORED FOR GITHUB ID
 # Update last_scraped for the passed in user in the DB
 def finalizeUserScrape(github_id: int, private_count, min_sponsor_tier, db):
 
@@ -517,68 +509,3 @@ def finalizeUserScrape(github_id: int, private_count, min_sponsor_tier, db):
         db.commit()
         cur.close()
     return
-
-
-# def migrateUser(username, db):
-
-#     # First, try to find as a User
-#     query_template_user = """
-#     query($username: String!) {
-#         user(login: $username) {
-#             databaseId
-#             login
-#         }
-#     }
-#     """
-#     payload_user = {
-#         "query": query_template_user,
-#         "variables": {"username": username},
-#     }
-#     response = postRequest(url=URL, json=payload_user)
-#     data = response.json()
-#     entity_data = data.get("data", {}).get("user")
-
-#     # If not found as a User, try as an Organization
-#     if not entity_data:
-#         query_template_org = """
-#         query($username: String!) {
-#             organization(login: $username) {
-#                 databaseId
-#                 login
-#             }
-#         }
-#         """
-#         payload_org = {
-#             "query": query_template_org,
-#             "variables": {"username": username},
-#         }
-#         response = postRequest(url=URL, json=payload_org)
-#         data = response.json()
-#         entity_data = data.get("data", {}).get("organization")
-
-#     if not entity_data:
-#         logging.warning(
-#             f"Could not find user or organization {username} on GitHub during migration. Skipping."
-#         )
-#         return
-
-#     github_id = int(entity_data["databaseId"])
-#     print(data)
-
-#     try:
-#         with db.cursor() as cur:
-#             cur.execute(
-#                 """
-#                 UPDATE queue SET
-#                     github_id = %s
-#                 WHERE username = %s;
-#                 """,
-#                 (github_id, username),
-#             )
-#             db.commit()
-#             cur.close()
-#             print(f"id updated for {username}")
-#     except Exception as e:
-#         print("error occured:", e)
-#         raise ValueError(e)
-#     return

@@ -29,7 +29,6 @@ def get_sponsorships(username, github_id: int, user_type):
     return sponsor_list, sponsored_list, private_count, lowest_tier_cost
 
 
-# * REFACTORED FOR GITHUB ID
 # Returns the sponsors that are associated to the passed in user
 def get_sponsors_from_api(github_id, user_type):
     """
@@ -153,7 +152,6 @@ def get_sponsors_from_api(github_id, user_type):
     return sponsors_list, private_sponsors_count, lowest_tier_cost
 
 
-# * REFACTORED FOR GITHUB ID
 # Returns an array of users who are sponsored by the passed in user
 def get_sponsored_from_api(github_id, user_type):
     """
