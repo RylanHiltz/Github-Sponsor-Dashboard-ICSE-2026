@@ -1,6 +1,7 @@
-import React, { useState } from "react"
-import { Input, Button } from "antd"
-import { SearchOutlined } from "@ant-design/icons"
+import React from "react"
+import { Input } from "antd"
+import { useContext } from "react"
+import { SearchContext } from '../context/SearchContext';
 
 interface SearchProps {
     onSubmit: (search: string) => void;
@@ -8,18 +9,34 @@ interface SearchProps {
 
 const Search: React.FC<SearchProps> = ({ onSubmit }) => {
 
-    // TODO: Add sticky text to search bar so when you come back to the page after vewing another user the seach result stays in the search bar
-    const [search, setSearch] = useState("")
+    const searchContext = useContext(SearchContext);
+
+    if (!searchContext) {
+        throw new Error("Search component must be used within a SearchProvider");
+    }
+
+    const { searchTerm, setSearchTerm } = searchContext;
+
+    const handleSearch = () => {
+        onSubmit(searchTerm);
+    };
 
     return (
         <>
-            <Input style={{ width: 'calc(50% - 85px)' }} className='min-w-[150px]' placeholder='Search by name or username' onChange={e => setSearch(e.target.value)} onKeyDown={
-                e => {
-                    if (e.key == "Enter") {
-                        onSubmit(search);
+            <Input
+                value={searchTerm}
+                className='min-w-[300px] w-[50%]'
+                placeholder='Search by name or username'
+                onChange={e => setSearchTerm(e.target.value)}
+                onKeyDown={
+                    e => {
+                        if (e.key == "Enter") {
+                            handleSearch();
+                        }
                     }
-                }} />
-            <Button type='text' className={`p-2 flex whitespace-nowrap w-min gap-1`} iconPosition='end' size="middle" icon={<SearchOutlined className='text-[16px]' />} onClick={() => onSubmit(search)}>Search</Button >
+                }
+            />
+
         </>
     )
 }
