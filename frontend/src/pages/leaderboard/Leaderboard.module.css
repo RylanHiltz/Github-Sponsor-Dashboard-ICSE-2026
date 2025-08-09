@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 .stats {
-  @apply bg-[#1D1D1D] col-span-1 h-full w-full rounded-xl p-5 text-left min-w-[200px];
+  @apply col-span-1 h-full w-full rounded-xl p-5 text-left min-w-[200px];
 }
 
 .stats h2 {

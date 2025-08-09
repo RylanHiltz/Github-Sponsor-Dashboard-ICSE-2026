@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef, useLayoutEffect, useContext } from 'react'
 import styles from './Leaderboard.module.css'
-import { Table, Pagination } from 'antd';
+import { Table, Pagination, Button } from 'antd';
 import { useNavigate } from 'react-router';
 import { apiUrl } from '../../api';
 import { createStyles } from 'antd-style';
 import Carousel from '../../components/Carousel';
+import { SearchContext } from '../../context/SearchContext';
 
 // Type imports 
 import type { TableProps, TablePaginationConfig } from 'antd';
@@ -12,7 +13,6 @@ import type { LeaderboardUser, Location, LeaderboardStatsData } from '../../type
 import type { ColumnsType } from 'antd/es/table';
 import type { FilterValue, SortOrder } from 'antd/es/table/interface';
 
-import { SearchContext } from '../../context/SearchContext';
 
 const useStyle = createStyles(({ css, prefixCls }) => {
     return {
@@ -144,16 +144,12 @@ const Leaderboard: React.FC = () => {
     }
 
     // Get leaderboard statistics every 15 seconds for live updating carousel
-    const getLeaderboardStats = async () => {
+    const getLeaderboardStats = async (signal?: AbortSignal) => {
         try {
             const response = await fetch(`${apiUrl}/api/stats/brief`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
             const data: LeaderboardStatsData = await response.json();
-
-            setTimeout(getLeaderboardStats, 15000);
             setLeaderboardData(data);
-
         } catch (error) {
             console.error("Error fetching leaderboard stats:", error);
         }
@@ -291,11 +287,11 @@ const Leaderboard: React.FC = () => {
             sortDirections: ["descend", "ascend"]
         },
         {
-            title: "Earnings (Estimate)",
+            title: "Min. Earnings (Estimate)",
             dataIndex: "estimated_earnings",
             className: styles.nowrapHeader,
             key: "earnings",
-            width: 165,
+            width: 200,
             render: (_: any, record: LeaderboardUser) => (
                 <span style={{ fontWeight: 600 }}>
                     ${Math.round(record.estimated_earnings)}<span style={{ fontWeight: 400, fontSize: 12 }}>+ USD/mo</span>
@@ -346,9 +342,28 @@ const Leaderboard: React.FC = () => {
         }
     }, []);
 
+
     useEffect(() => {
-        getLeaderboardStats();
+        // Poll once immediately, then every 15s. Clean up to avoid duplicate timers in StrictMode.
+        const controller = new AbortController();
+        let timer: number | undefined;
+        let inFlight = false;
         getLocations();
+
+        const tick = async () => {
+            if (inFlight) return; // prevent overlap
+            inFlight = true;
+            await getLeaderboardStats(controller.signal);
+            inFlight = false;
+            timer = window.setTimeout(tick, 15000);
+        };
+
+        tick(); // immediate first fetch
+
+        return () => {
+            controller.abort();                     // cancel in-flight request
+            if (timer) window.clearTimeout(timer);  // clear scheduled poll
+        };
     }, []);
 
 
@@ -370,54 +385,12 @@ const Leaderboard: React.FC = () => {
 
     return (
         <>
-            <section className='grid grid-cols-1 grid-rows-[_1.2fr,5fr] h-full px-4 gap-3'>
+            <section className='grid grid-cols-1 grid-rows-[_1.2fr,5fr] h-full pl-2 gap-3'>
                 <div className='flex flex-col flex-shrink-0 gap-2 w-full h-full'>
                     <h1 className='text-[24px] font-semibold pb-1'>Leaderboard Statistics</h1>
                     <div className='flex-1 flex'>
                         {leaderboardData && <Carousel {...leaderboardData} />}
                     </div>
-                    {/* <div className={styles.carouselContainer}>
-                        <div className={styles.carouselTrack}>
-                            {leaderboardData && [...Array(2)].map((_, i) => (
-                                <React.Fragment key={i}>
-                                    <div className='flex-shrink-0 h-full w-1/4 px-2'>
-                                        <div className={`${styles.stats} flex-none`}>
-                                            <h3>Total Users Tracked</h3>
-                                            <h2 id="total-users-stat">{leaderboardData.total_users.toLocaleString()}</h2>
-                                        </div>
-                                    </div>
-                                    <div className='flex-shrink-0 h-full w-1/4 px-2'>
-                                        <div className={`${styles.stats} flex-none`}>
-                                            <h3>Unique Sponsorships</h3>
-                                            <h2 id="total-sponsorships-stat">{leaderboardData.total_sponsorships.toLocaleString()}</h2>
-                                        </div>
-                                    </div>
-                                    <div className='flex-shrink-0 h-full w-1/4 px-2'>
-                                        <div className={`${styles.stats} flex-none`}>
-                                            <h3>Top Sponsored</h3>
-                                            <h2>
-                                                <span className='flex items-center justify-start gap-2'>
-                                                    <img src={leaderboardData.top_sponsored.avatar_url} alt={leaderboardData.top_sponsored.username} className='w-8 h-8 rounded-full' />
-                                                    <p className='pb-1 text-[30px]'>{leaderboardData.top_sponsored.username}</p>
-                                                </span>
-                                            </h2>
-                                        </div>
-                                    </div>
-                                    <div className='flex-shrink-0 h-full w-1/4 px-2'>
-                                        <div className={`${styles.stats} flex-none`}>
-                                            <h3>Top Sponsoring</h3>
-                                            <h2>
-                                                <span className='flex items-center justify-start gap-2'>
-                                                    <img src={leaderboardData.top_sponsoring.avatar_url} alt={leaderboardData.top_sponsoring.username} className='w-8 h-8 rounded-full' />
-                                                    <p className='pb-1 text-[30]'>{leaderboardData.top_sponsoring.username}</p>
-                                                </span>
-                                            </h2>
-                                        </div>
-                                    </div>
-                                </React.Fragment>
-                            ))}
-                        </div>
-                    </div> */}
                 </div>
                 <div className='row-span-2 flex flex-col'>
                     <div ref={ref1} className='flex-grow overflow-y-hidden custom-scrollbar'>
@@ -439,21 +412,24 @@ const Leaderboard: React.FC = () => {
 
                         />
                     </div>
-                    <div className='flex-shrink-0 flex justify-end p-4'>
-                        <Pagination
-                            current={pagination.current}
-                            pageSize={pagination.pageSize}
-                            total={pagination.total} // Use total from state
-                            showSizeChanger
-                            pageSizeOptions={['10', '20', '50', '100']}
-                            onChange={(page, size) => {
-                                setPagination(prev => ({
-                                    ...prev,
-                                    current: page,
-                                    pageSize: size,
-                                }));
-                            }}
-                        />
+                    <div className='flex-shrink-0 flex justify-end pt-2'>
+                        <div className='flex w-full justify-between'>
+                            <Button>Clear Filters</Button>
+                            <Pagination
+                                current={pagination.current}
+                                pageSize={pagination.pageSize}
+                                total={pagination.total} // Use total from state
+                                showSizeChanger
+                                pageSizeOptions={['10', '20', '50', '100']}
+                                onChange={(page, size) => {
+                                    setPagination(prev => ({
+                                        ...prev,
+                                        current: page,
+                                        pageSize: size,
+                                    }));
+                                }}
+                            />
+                        </div>
                     </div>
                 </div>
             </section >
