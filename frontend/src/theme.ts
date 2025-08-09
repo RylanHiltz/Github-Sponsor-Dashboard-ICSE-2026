@@ -5,8 +5,8 @@ export const theme = {
   extend: {
     colors: {
       primary: {
-        light: '555879',
-        dark: '98A1BC'
+        light: '#3779E3',
+        dark: '#3779E3'
       },
       background: {
         light: '#ffffff',
@@ -24,7 +24,15 @@ export const theme = {
         secondary: {
           light: '#6b7280',
           dark: '#9ca3af'
+        },
+        linkHover: {
+          light: '#7A73D1',
+          dark: '#B5A8D5'
         }
+      },
+      carouselBg: {
+        light: '#F9F6F7',
+        dark: '#1D1D1D',
       }
     },
   },
