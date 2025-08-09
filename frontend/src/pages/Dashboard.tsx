@@ -1,12 +1,12 @@
 import React, { useContext } from 'react';
-import { useNavigate, useLocation, Outlet } from 'react-router';
+import { useNavigate, useLocation, Outlet, Link } from 'react-router';
 import { Layout, Menu, theme, Statistic } from 'antd';
 import Search from '../components/SearchBar';
 import { SearchProvider, SearchContext } from '../context/SearchContext';
 import DarkmodeButton from '../components/DarkmodeButton';
 
 import { AiFillGithub } from "react-icons/ai";
-import { MdBorderColor, MdSpaceDashboard } from "react-icons/md";
+import { MdSpaceDashboard } from "react-icons/md";
 import { MdPersonAddAlt1 } from "react-icons/md";
 import { IoMdStats } from "react-icons/io";
 
@@ -30,6 +30,7 @@ const DashboardContent: React.FC = () => {
     const routes: { [key: string]: string } = {
         '1': '/',
         '2': '/statistics',
+        '3': '/request-user',
     };
 
     const menuKeyMap = Object.fromEntries(
@@ -43,18 +44,18 @@ const DashboardContent: React.FC = () => {
     };
 
     const {
-        token: { colorBgContainer, borderRadiusLG, colorBorder, colorBorderSecondary },
+        token: { colorBgContainer, borderRadiusLG, colorBorder, linkHover, },
     } = theme.useToken();
 
 
     return (
         <Layout className='h-screen'>
-            <Header style={{ background: colorBgContainer, borderBottom: `1px solid ${colorBorder}` }} className='items-center flex gap-3 px-[20px] justify-between'>
+            <Header style={{ background: colorBgContainer, borderBottom: `1px solid ${colorBorder}` }} className='items-center flex gap-3 pr-2.5 pl-5 justify-between'>
                 <div className='flex items-center gap-5 w-full'>
-                    <span className='flex items-center gap-1.5 px-1'>
+                    <Link to={"/"} style={{ color: 'inherit' }} onMouseEnter={(e) => e.currentTarget.style.color = linkHover} onMouseLeave={(e) => e.currentTarget.style.color = 'inherit'} className="flex items-center gap-1.5 px-1">
                         <AiFillGithub className='text-[22px]' />
                         <h1 className='font-semibold text-[18px] whitespace-nowrap'>Github Sponsorships</h1>
-                    </span>
+                    </Link>
                     <span className='flex w-full gap-2'>
                         {location.pathname === '/' && (
                             <Search onSubmit={e => { setSearchTerm(e) }} />
