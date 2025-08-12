@@ -1,18 +1,22 @@
 // Import Swiper React components
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay } from 'swiper/modules';
+import { theme } from 'antd';
+
+// Import styles
+import 'swiper/swiper-bundle.css';
 import styles from "../pages/leaderboard/Leaderboard.module.css"
 
 import type { LeaderboardStatsData } from '../types/LeaderboardUserModel';
 
-// Import Swiper styles
-import 'swiper/swiper-bundle.css';
 
 const Carousel = (data: LeaderboardStatsData | null) => {
 
     if (!data) {
         throw console.error("Data Doesnt Exist!");
     }
+
+    const { token } = theme.useToken();
 
     return (
         <Swiper
@@ -37,19 +41,19 @@ const Carousel = (data: LeaderboardStatsData | null) => {
         >
             {/* Dynamically create slides from data */}
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
                     <h3>Total Users Tracked</h3>
                     <h2 id="total-users-stat">{data.total_users.toLocaleString()}</h2>
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
                     <h3>Unique Sponsorships</h3>
                     <h2 id="total-sponsorships-stat">{data.total_sponsorships.toLocaleString()}</h2>
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
                     <h3>Top Sponsored</h3>
                     <h2>
                         <span className='flex items-center justify-start gap-2'>
@@ -60,7 +64,7 @@ const Carousel = (data: LeaderboardStatsData | null) => {
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
                     <h3>Top Sponsoring</h3>
                     <h2>
                         <span className='flex items-center justify-start gap-2'>
@@ -71,19 +75,19 @@ const Carousel = (data: LeaderboardStatsData | null) => {
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
                     <h3>Total Users Tracked</h3>
                     <h2 id="total-users-stat">{data.total_users.toLocaleString()}</h2>
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
                     <h3>Unique Sponsorships</h3>
                     <h2 id="total-sponsorships-stat">{data.total_sponsorships.toLocaleString()}</h2>
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
                     <h3>Top Sponsored</h3>
                     <h2>
                         <span className='flex items-center justify-start gap-2'>
@@ -94,7 +98,7 @@ const Carousel = (data: LeaderboardStatsData | null) => {
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
                     <h3>Top Sponsoring</h3>
                     <h2>
                         <span className='flex items-center justify-start gap-2'>
