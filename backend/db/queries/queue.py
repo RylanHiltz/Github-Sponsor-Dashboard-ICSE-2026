@@ -46,6 +46,39 @@ def batchAddQueue(github_ids, depth, db):
     return
 
 
+def batchRequeue(db):
+    with db.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE queue SET
+            depth = 1, 
+            status = 'pending'
+            WHERE status = 'skipped';
+            """
+        )
+    db.commit()
+    print("Batch requeued all edge case users at maximum depth as new roots")
+    return
+
+
+# Update status of users to "pending" to crawl again if they exceed days_old created at time
+# Resets the created_at time to current time, enqueing them for scraping again (after current queue)
+def enqueueStaleUsers(db, days_old):
+    with db.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE queue
+            SET status = 'pending', created_at = NOW()
+            FROM users
+            WHERE queue.github_id = users.github_id
+            AND queue.status = 'completed'
+            AND users.last_scraped < NOW() - INTERVAL '%s days'
+            """,
+            (days_old,),
+        )
+        db.commit()
+
+
 # Gets the first user inside the queue who has status="pending"
 def getFirstInQueue(db):
     cur = db.cursor()
@@ -77,7 +110,6 @@ def updateStatus(github_id: int, status, db):
             (status, github_id),
         )
         db.commit()
-        cur.close()
         print(f"Updated user status\n")
         return
 
@@ -169,21 +201,3 @@ def deleteFromQueue(github_id, db):
         cur.close()
         print(f"Deleted user from queue")
         return
-
-
-# Update status of users to "pending" to crawl again if they exceed days_old created at time
-# Resets the created_at time to current time, enqueing them for scraping again (after current queue)
-def enqueueStaleUsers(db, days_old):
-    with db.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE queue
-            SET status = 'pending', created_at = NOW()
-            FROM users
-            WHERE queue.github_id = users.github_id
-            AND queue.status = 'completed'
-            AND users.last_scraped < NOW() - INTERVAL '%s days'
-            """,
-            (days_old,),
-        )
-        db.commit()
