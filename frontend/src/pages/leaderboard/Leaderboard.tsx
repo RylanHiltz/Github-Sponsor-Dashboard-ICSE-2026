@@ -6,6 +6,7 @@ import { apiUrl } from '../../api';
 import { createStyles } from 'antd-style';
 import Carousel from '../../components/Carousel';
 import { SearchContext } from '../../context/SearchContext';
+import { MdClear } from "react-icons/md";
 
 // Type imports 
 import type { TableProps, TablePaginationConfig } from 'antd';
@@ -414,8 +415,10 @@ const Leaderboard: React.FC = () => {
                     </div>
                     <div className='flex-shrink-0 flex justify-end pt-2'>
                         <div className='flex w-full justify-between'>
-                            <Button>Clear Filters</Button>
+                            {/* TODO: implement clear filters button */}
+                            <Button icon={<MdClear />} iconPosition='end'>Clear Filters</Button>
                             <Pagination
+                                simple
                                 current={pagination.current}
                                 pageSize={pagination.pageSize}
                                 total={pagination.total} // Use total from state

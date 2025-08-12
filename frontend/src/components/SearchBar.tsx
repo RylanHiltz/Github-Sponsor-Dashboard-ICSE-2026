@@ -1,5 +1,5 @@
 import React from "react"
-import { Input } from "antd"
+import { Input, Button } from "antd"
 import { useContext } from "react"
 import { SearchContext } from '../context/SearchContext';
 
@@ -25,18 +25,16 @@ const Search: React.FC<SearchProps> = ({ onSubmit }) => {
         <>
             <Input
                 value={searchTerm}
+                allowClear
                 className='min-w-[300px] w-[50%]'
                 placeholder='Search by name or username'
                 onChange={e => setSearchTerm(e.target.value)}
-                onKeyDown={
-                    e => {
-                        if (e.key == "Enter") {
-                            handleSearch();
-                        }
+                onKeyDown={e => {
+                    if (e.key === "Enter") {
+                        handleSearch();
                     }
-                }
+                }}
             />
-
         </>
     )
 }
