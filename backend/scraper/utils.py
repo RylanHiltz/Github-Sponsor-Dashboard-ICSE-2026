@@ -1,16 +1,22 @@
 import time
 import logging
-from backend.logs.logger_config import init_logger
-import os
 import base64
 from dotenv import load_dotenv
 from backend.utils.github_api import postRequest
-import json
+
+# Scraping Import
+from playwright.sync_api import sync_playwright
+
+# Query Import
+from backend.db.queries.users import getGithubIDs
+from backend.db.queries.queue import batchAddQueue
+
 
 load_dotenv()
 
 # Globals
 URL = "https://api.github.com/graphql"
+SPONSORS_URL = "https://github.com/sponsors/explore"
 
 
 # Parent function to handle both functions running
@@ -252,3 +258,62 @@ def get_sponsored_from_api(github_id, user_type):
         )
     print(sponsored_list, len(sponsored_list))
     return sponsored_list
+
+
+# Use scraper to visit githubs sponsor board to retrieve new sponsors
+# Appends to the database
+def getNewRoots():
+
+    # List of unique usernames scraped by the
+    username_list = set()
+
+    with sync_playwright() as p:
+
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(SPONSORS_URL)
+
+        # Wait for the initial content to load
+        page.wait_for_selector("turbo-frame[id='sponsors-featured-accounts'] article")
+        start = time.time()
+
+        while len(username_list) < 500:
+            # Scrape usernames from the current view
+            usernames = page.query_selector_all(
+                "turbo-frame[id='sponsors-featured-accounts'] article"
+            )
+
+            for user in usernames:
+                user_link = user.query_selector("h2[class='h3 lh-condensed'] a")
+                if user_link:
+                    href_value = user_link.get_attribute("href").replace("/", "")
+                    username_list.add(href_value)
+            print(f"Collected {len(username_list)} unique usernames.")
+
+            if len(username_list) >= 500:
+                break
+
+            # Find the refresh button and click it to load new accounts
+            refresh_button = page.query_selector(
+                "a[id='sponsors-featured-accounts-refresh-button']"
+            )
+            if refresh_button:
+                refresh_button.click()
+                # Sleep 2 seconds to buffer next Github Request (Website Limitation)
+                # The page seems to need to buffer about 5 times on 2 second intervals for a next random 25 to be loaded
+                time.sleep(2)
+            else:
+                logging.error("Refresh button not found. Exiting.")
+                break
+        browser.close()
+
+    end = time.time()
+    elapsed = end - start
+    print(f"elaspsed, {elapsed:.2f}")
+    # O(n) and run a query to get the user_id from the username pulled off github to be batch queued to the DB
+
+    print(f"Collected {len(username_list)} unique usernames.")
+    print("length of list: ", len(username_list))
+    github_ids = getGithubIDs(list(username_list))
+
+    return github_ids
