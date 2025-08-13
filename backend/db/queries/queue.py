@@ -1,9 +1,8 @@
-from backend.utils.db_conn import db_connection
-from backend.models.UserModel import UserModel
+# ENV Imports
 from dotenv import load_dotenv
-from flask import Blueprint, jsonify
-from psycopg2.extras import RealDictCursor
 import os
+
+# Functional Imports
 import requests
 
 
@@ -201,3 +200,19 @@ def deleteFromQueue(github_id, db):
         cur.close()
         print(f"Deleted user from queue")
         return
+
+
+def checkStatus(status, db):
+    with db.cursor() as cur:
+        cur.execute(
+            """
+            SELECT FROM queue
+            WHERE status = %s;
+            """,
+            (status,),
+        )
+        db.commit()
+        result = cur.fetchone()
+    if result is not None:
+        return True
+    return False
