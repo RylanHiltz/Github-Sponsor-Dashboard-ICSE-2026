@@ -1,26 +1,27 @@
-# Database imports
-from backend.models.UserModel import UserModel
+# ENV Imports
 from dotenv import load_dotenv
 import os
+
+# DB Query imports
+from backend.db.queries.queue import deleteFromQueue
+from backend.models.UserModel import UserModel
+
+# Functional Imports
+from backend.utils.github_api import getRequest, postRequest
+from openai import OpenAI
+from datetime import datetime, timezone
 import requests
 import json
-from openai import OpenAI
+import re
 
-# Scraper imports
+# Scraper Imports
 from playwright.sync_api import sync_playwright
 
-from backend.utils.github_api import getRequest, postRequest
-
-from backend.db.queries.queue import deleteFromQueue
-
-from datetime import datetime, timezone
-import base64
+# Logging Imports
 import logging
-import re
 
 # Load sensitive variables
 load_dotenv()
-# GITHUB_TOKEN = os.getenv("PAT")
 EMAIL = os.getenv("email")
 API_KEY = os.getenv("API_KEY")
 URL = "https://api.github.com/graphql"
@@ -29,7 +30,8 @@ URL = "https://api.github.com/graphql"
 # File for query logic that will be used/imported into the scraper
 def createUser(github_id: int, db):
 
-    user = getUserData(github_id)
+    user = getUserData(github_id, db)
+    print(user)
 
     with db.cursor() as cur:
         cur.execute(
@@ -58,7 +60,7 @@ def createUser(github_id: int, db):
                 github_created_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (github_id, username) DO UPDATE SET
+            ON CONFLICT (github_id) DO UPDATE SET
                 username = EXCLUDED.username,
                 name = EXCLUDED.name,
                 type = EXCLUDED.type,
@@ -124,9 +126,11 @@ def createUser(github_id: int, db):
 def enrichUser(github_id: int, db, enriched=False, identity=None):
 
     if not enriched:
-        user = getUserData(github_id=github_id)
+        user = getUserData(github_id=github_id, db=db)
     else:
-        user = getUserData(github_id=github_id, is_enriched=enriched, identity=identity)
+        user = getUserData(
+            github_id=github_id, db=db, is_enriched=enriched, identity=identity
+        )
 
     with db.cursor() as cur:
         cur.execute(
@@ -204,10 +208,10 @@ def batchCreateUser(usernames, db):
     return
 
 
-def getUserData(github_id: int, is_enriched=False, identity=None):
+def getUserData(github_id: int, db, is_enriched=False, identity=None):
     # Call Github GraphQL API to get the user metadata
     try:
-        data = getGithubData(github_id=github_id)
+        data = getGithubData(github_id=github_id, db=db)
         user = UserModel.from_api(data)
 
         if user.location is not None:
@@ -250,16 +254,24 @@ def getUserData(github_id: int, is_enriched=False, identity=None):
 
 
 # Use GraphQL to query for users data based off their github ID
-def getGithubData(github_id: int):
+def getGithubData(github_id: int, db):
     try:
         rest_url = f"https://api.github.com/user/{github_id}"
         response = getRequest(url=rest_url)
         response.raise_for_status()
         return response.json()
-    except Exception as e:
-        logging.error(
-            f"An unexpected error occurred fetching user by ID {github_id}: {e}"
-        )
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            logging.error(
+                f" has changed usernames or no longer exists on github, Nuke user from DB."
+            )
+            deleteUser(github_id, db)
+            deleteFromQueue(github_id, db)
+            raise ValueError(f"User not found on GitHub.")
+        else:
+            logging.error(
+                f"An unexpected error occurred fetching user by ID {github_id}: {e}"
+            )
     return None
 
 
@@ -509,3 +521,65 @@ def finalizeUserScrape(github_id: int, private_count, min_sponsor_tier, db):
         db.commit()
         cur.close()
     return
+
+
+def getGithubIDs(usernames):
+    """
+    Gets the GitHub database IDs for a list of usernames by batching
+    GraphQL queries.
+    """
+    user_map = []
+    # GitHub's GraphQL API has a node limit per query (usually 100).
+    # We query for both user and organization for each username, so 2 nodes per name.
+    # A batch size of 50 is safe (50 usernames * 2 nodes = 100 nodes).
+    batch_size = 50
+
+    for i in range(0, len(usernames), batch_size):
+        batch = usernames[i : i + batch_size]
+
+        # Dynamically build the query with aliases for each username
+        query_parts = []
+        for username in batch:
+            # Sanitize username to be a valid GraphQL alias
+            alias_username = f"_{username.replace('-', '_')}"
+            query_parts.append(
+                f"""
+                user{alias_username}: user(login: "{username}") {{
+                    databaseId
+                    login
+                }}
+                org{alias_username}: organization(login: "{username}") {{
+                    databaseId
+                    login
+                }}
+            """
+            )
+
+        query = "query {" + " ".join(query_parts) + "}"
+
+        # Make the single API call for the entire batch
+        payload = {"query": query}
+        response = postRequest(url=URL, json=payload)
+        data = response.json().get("data", {})
+
+        if not data:
+            logging.warning(f"Received no data for user batch starting with {batch[0]}")
+            continue
+
+        # 3. Process the response for the batch
+        for username in batch:
+            alias_username = f"_{username.replace('-', '_')}"
+            user_data = data.get(f"user{alias_username}")
+            org_data = data.get(f"org{alias_username}")
+
+            entity_data = user_data or org_data  # Pick the one that is not null
+
+            if entity_data and entity_data.get("databaseId"):
+                github_id = int(entity_data["databaseId"])
+                user_map.append(github_id)
+            else:
+                logging.warning(
+                    f"Could not find user or organization {username} on GitHub. Skipping."
+                )
+    print(user_map)
+    return user_map
