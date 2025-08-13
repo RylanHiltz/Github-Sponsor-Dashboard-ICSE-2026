@@ -1,14 +1,17 @@
-import requests
+# ENV Imports
 from dotenv import load_dotenv
 import os
-import base64
-import logging
-from flask import jsonify
-import json
-import time
+
+# Functional Imports
 from backend.utils.github_api import postRequest
+from datetime import datetime
+import json
+import base64
+
+# Logging Imports
+import logging
+import time
 from backend.logs.logger_config import log_section
-from datetime import datetime, timezone
 
 # Load sensitive variables
 load_dotenv()
@@ -128,7 +131,6 @@ def getUserActivity(github_id, user_id, user_type, created_at, db=None):
     return
 
 
-# TODO add case where id already exists and delete the username that is currently being updated from users and queue
 def getTotalUserActivity(user_id, db):
 
     with db.cursor() as cur:
@@ -161,3 +163,23 @@ def getTotalUserActivity(user_id, db):
         "total_issues": 0,
         "total_reviews": 0,
     }
+
+
+def refreshActivityCheck(user_id, db):
+    with db.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                COALESCE(MAX(last_updated), 'epoch'::timestamp) < NOW() - INTERVAL '365 days'
+            FROM
+                user_activity
+            WHERE
+                user_id = %s;
+            """,
+            (user_id,),
+        )
+        result = cur.fetchone()
+        print(result)
+        # The query returns a tuple with a single boolean value, e.g., (True,).
+        # We need to extract the boolean from the tuple.
+        return result[0] if result is not None else True
