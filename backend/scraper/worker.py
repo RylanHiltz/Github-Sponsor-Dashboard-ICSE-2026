@@ -1,17 +1,11 @@
-import time
-from backend.utils.db_conn import db_connection
-import logging
-from pathlib import Path
-import logging
-import psycopg2
-
 # DB Queries
 from backend.db.queries.queue import (
     getFirstInQueue,
-    # batchGetQueue,
     batchAddQueue,
+    batchRequeue,
     updateStatus,
     enqueueStaleUsers,
+    checkStatus,
 )
 from backend.db.queries.users import (
     createUser,
@@ -24,16 +18,19 @@ from backend.db.queries.sponsors import (
     syncSponsors,
     syncSponsorships,
 )
-from backend.db.queries.user_activity import getUserActivity
+from backend.db.queries.user_activity import getUserActivity, refreshActivityCheck
 
 # Scraper
-from backend.scraper.utils import get_sponsorships
+from backend.scraper.utils import get_sponsorships, getNewRoots
 
-# Authentication for pronoun scraping
+# Authentication And Database
+import psycopg2
+from backend.utils.db_conn import db_connection
 from backend.scraper.use_auth import get_auth, is_auth_expiring_soon
 
+# Logging Imports
 import time
-
+import logging
 from backend.logs.logger_config import init_logger, log_header
 
 MAX_DEPTH = 6
@@ -74,8 +71,15 @@ class ScraperWorker:
             try:
                 #  Fetch first user from queue
                 data = getFirstInQueue(db=conn)
+
+                # If all pending users have been scraped
                 if not data:
-                    time.sleep(5)
+                    has_skipped = checkStatus("skipped", conn)
+                    if has_skipped:
+                        batchRequeue(db=conn)
+                    else:
+                        new_roots = getNewRoots()
+                        batchAddQueue(new_roots, 1, conn)
                     continue
 
                 github_id = data["github_id"]
@@ -86,7 +90,7 @@ class ScraperWorker:
 
                 # If the users depth exceeds MAX_DEPTH to crawl, skip the user and continue to next in queue
                 if depth > MAX_DEPTH:
-                    updateStatus(github_id, "skipped")
+                    updateStatus(github_id, "skipped", conn)
                     logging.info(
                         f"Skipped user: Github ID {github_id}, Max Depth Reached."
                     )
@@ -106,7 +110,6 @@ class ScraperWorker:
                         logging.info(
                             f"Processing User: Github ID {github_id} at depth: {depth}"
                         )
-
                     # User has already been scraped for their data once (prevents unwanted future updates)
                     elif user_exists and is_enriched == True:
                         user = enrichUser(
@@ -118,14 +121,12 @@ class ScraperWorker:
                         logging.info(
                             f"User already enriched: Github ID {github_id} at depth: {depth}, Data has been refreshed."
                         )
-
                     # User does not exist in DB, create new user
                     elif not user_exists:
                         user, user_id = createUser(github_id, db=conn)
                         logging.info(
                             f"Creating User: Github ID {github_id} at depth: {depth}"
                         )
-
                 except ValueError as e:
                     logging.warning(
                         "User has been deleted. They do not exist on github (sponsors if previously existed have been updated)"
@@ -151,15 +152,21 @@ class ScraperWorker:
                 syncSponsors(user_id, sponsors, conn)
                 syncSponsorships(user_id, sponsoring, conn)
 
-                print(f"\nCollecting User Activity Data For: '{user.username}'")
-                # Collect the user activity from the Github API (potentially a lot of API requests)
-                getUserActivity(
-                    github_id=github_id,
-                    user_id=user_id,
-                    user_type=user.type,
-                    created_at=user.github_created_at,
-                    db=conn,
-                )
+                # Collect the user activity from the Github API ONLY if the specified user HAS a sponsor or is sponsoring
+                # Users without either dont need their user activity collected as they will not be shown in the dataset.
+                if sponsors or sponsoring:
+                    print(f"\nCollecting User Activity Data For: '{user.username}'")
+                    # Checks if the user activity does not exist or is over 365 days old,
+                    # otherwise skip this function due to it being quite resource intensive
+                    refresh_activity = refreshActivityCheck(user_id, conn)
+                    if refresh_activity:
+                        getUserActivity(
+                            github_id=github_id,
+                            user_id=user_id,
+                            user_type=user.type,
+                            created_at=user.github_created_at,
+                            db=conn,
+                        )
 
                 # Update staus of the crawled user
                 updateStatus(github_id=github_id, status="completed", db=conn)
