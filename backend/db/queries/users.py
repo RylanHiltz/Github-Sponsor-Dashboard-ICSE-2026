@@ -190,16 +190,16 @@ def enrichUser(github_id: int, db, enriched=False, identity=None):
 
 
 # Batch create minimum users for sponsorship relations
-def batchCreateUser(usernames, db):
+def batchCreateUser(github_ids, db):
 
-    entries = [(username,) for username in usernames]
+    entries = [(github_id,) for github_id in github_ids]
 
     with db.cursor() as cur:
         cur.executemany(
             """
-            INSERT INTO users (username)
+            INSERT INTO users (github_id)
             VALUES (%s)
-            ON CONFLICT (username) DO NOTHING;
+            ON CONFLICT (github_id) DO NOTHING;
             """,
             entries,
         )
