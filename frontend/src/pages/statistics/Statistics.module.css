@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.Card {
+  @apply bg-[#1D1D1D];
+}
+
+.Card h1 {
+  @apply text-[16px];
+}
