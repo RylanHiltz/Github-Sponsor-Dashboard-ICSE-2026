@@ -41,19 +41,19 @@ const Carousel = (data: LeaderboardStatsData | null) => {
         >
             {/* Dynamically create slides from data */}
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.cardBg }}>
                     <h3>Total Users Tracked</h3>
                     <h2 id="total-users-stat">{data.total_users.toLocaleString()}</h2>
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.cardBg }}>
                     <h3>Unique Sponsorships</h3>
                     <h2 id="total-sponsorships-stat">{data.total_sponsorships.toLocaleString()}</h2>
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.cardBg }}>
                     <h3>Top Sponsored</h3>
                     <h2>
                         <span className='flex items-center justify-start gap-2'>
@@ -64,7 +64,7 @@ const Carousel = (data: LeaderboardStatsData | null) => {
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.cardBg }}>
                     <h3>Top Sponsoring</h3>
                     <h2>
                         <span className='flex items-center justify-start gap-2'>
@@ -75,19 +75,19 @@ const Carousel = (data: LeaderboardStatsData | null) => {
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.cardBg }}>
                     <h3>Total Users Tracked</h3>
                     <h2 id="total-users-stat">{data.total_users.toLocaleString()}</h2>
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.cardBg }}>
                     <h3>Unique Sponsorships</h3>
                     <h2 id="total-sponsorships-stat">{data.total_sponsorships.toLocaleString()}</h2>
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.cardBg }}>
                     <h3>Top Sponsored</h3>
                     <h2>
                         <span className='flex items-center justify-start gap-2'>
@@ -98,7 +98,7 @@ const Carousel = (data: LeaderboardStatsData | null) => {
                 </div>
             </SwiperSlide>
             <SwiperSlide>
-                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.carouselBg }}>
+                <div className={`${styles.stats} flex-none`} style={{ backgroundColor: token.cardBg }}>
                     <h3>Top Sponsoring</h3>
                     <h2>
                         <span className='flex items-center justify-start gap-2'>
