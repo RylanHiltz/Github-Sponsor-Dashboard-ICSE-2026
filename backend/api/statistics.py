@@ -16,11 +16,29 @@ def get_stats():
 
         cur.execute(
             """
-            WITH total_users_cte AS (
-                SELECT COUNT(id) as total_users FROM users WHERE is_enriched = True
+            WITH sponsorship_counts AS (
+                SELECT 
+                    u.id AS user_id,
+                    COALESCE(COUNT(DISTINCT s1.sponsor_id), 0) + 
+                    COALESCE(u.private_sponsor_count, 0) AS total_sponsors,
+                    COALESCE((
+                        SELECT COUNT(DISTINCT s2.sponsored_id)
+                        FROM sponsorship s2
+                        WHERE s2.sponsor_id = u.id
+                    ), 0) AS total_sponsoring
+                FROM users u
+                LEFT JOIN sponsorship s1 ON s1.sponsored_id = u.id
+                GROUP BY u.id, u.private_sponsor_count
+            ),
+            total_users_cte AS (
+                SELECT COUNT(u.id) AS total_users
+                FROM users u
+                JOIN sponsorship_counts sc ON u.id = sc.user_id
+                WHERE u.is_enriched IS TRUE 
+                AND (sc.total_sponsors > 0 OR sc.total_sponsoring > 0)
             ),
             total_sponsorships_cte AS (
-                SELECT COUNT(id) as total_sponsorships FROM sponsorship
+            SELECT COUNT(id) as total_sponsorships FROM sponsorship
             ),
             sponsoring_counts AS (
                 SELECT
