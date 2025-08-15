@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+// import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router'
 import Dashboard from './pages/Dashboard'
 import Statistics from './pages/statistics/Statistics';
@@ -11,8 +11,9 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { theme as appTheme } from './theme.ts';
 
 import type { AliasToken } from 'antd/es/theme/internal';
+
 interface CustomToken extends AliasToken {
-  carouselBg: string;
+  cardBg: string;
 }
 
 // A new component to access the context provided by ThemeProvider
@@ -30,15 +31,16 @@ const ThemedApp = () => {
             ? themeColors.primary.dark
             : themeColors.primary.light,
           colorBgContainer: theme === 'dark' ? '#141414' : '#fff',
-          carouselBg: theme === 'dark'
-            ? themeColors.carouselBg.dark
-            : themeColors.carouselBg.light,
+          cardBg: theme === 'dark'
+            ? themeColors.cardBg.dark
+            : themeColors.cardBg.light,
           linkHover: theme === 'dark'
             ? themeColors.text.linkHover.dark
             : themeColors.text.linkHover.light,
         } as Partial<CustomToken>,
 
       }}
+
     >
       <BrowserRouter>
         <Routes>

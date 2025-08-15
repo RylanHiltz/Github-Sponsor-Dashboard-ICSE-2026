@@ -4,7 +4,7 @@ import 'antd';
 declare module 'antd/es/theme/internal' {
     // List of custom style properties
     interface AliasToken {
-      carouselBg: string;
+      cardBg: string;
       linkHover: string;
   }
 }

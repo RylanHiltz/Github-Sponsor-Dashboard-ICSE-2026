@@ -30,8 +30,8 @@ export const theme = {
           dark: '#B5A8D5'
         }
       },
-      carouselBg: {
-        light: '#F9F6F7',
+      cardBg: {
+        light: '#F7F7F7',
         dark: '#1D1D1D',
       }
     },
