@@ -36,8 +36,7 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
                     flex-1 min-h-0
                     grid grid-flow-dense gap-5 pt-2.5 pb-2
                     grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4
-                    auto-rows-[minmax(140px,auto)]
-                    xl:[grid-template-rows:110px] xl:auto-rows-[minmax(180px,auto)]
+                    grid-rows-[100px] auto-rows-auto max:lg:grid-rows-6
                     overflow-y-hidden
                     "
                 >
@@ -57,7 +56,7 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
                         style={{ backgroundColor: token.cardBg }}
                         className={`${styles.Card} stat-card h-full`}
                     >
-                        <h1></h1>
+                        <h1>Box 3</h1>
                     </Card>
                     <Card
                         style={{ backgroundColor: token.cardBg }}
@@ -69,7 +68,7 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
                     {/* Largest graph */}
                     <Card
                         style={{ backgroundColor: token.cardBg }}
-                        className={`${styles.Card} stat-card h-full col-span-1 sm:col-span-4 lg:col-span-3 xl:col-span-3 xl:row-span-2`}
+                        className={`${styles.Card} stat-card h-full col-span-1 sm:col-span-3 lg:col-span-3 lg:row-start-3 xl:col-span-3 xl:row-span-2 xl:row-start-auto`}
                     >
                         <h1>Location Distribution of Users</h1>
                     </Card>
@@ -77,13 +76,13 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
                     {/* Right-side graphs */}
                     <Card
                         style={{ backgroundColor: token.cardBg }}
-                        className={`${styles.Card} stat-card h-full col-span-1 col-start-4 xl:col-span-1`}
+                        className={`${styles.Card} stat-card h-full col-span-1 lg:col-start-3 lg:row-start-1 max:lg:row-span-2 xl:col-start-4 xl:row-start-2 xl:col-span-1`}
                     >
                         <h1>Gender Distribution</h1>
                     </Card>
                     <Card
                         style={{ backgroundColor: token.cardBg }}
-                        className={`${styles.Card} stat-card h-full col-span-1 col-start-4 xl:col-span-1`}
+                        className={`${styles.Card} stat-card h-full col-span-1 lg:col-start-3 lg:row-start-2 xl:col-start-4 xl:row-start-3 xl:col-span-1`}
                     >
                         <h1>card</h1>
                     </Card>
