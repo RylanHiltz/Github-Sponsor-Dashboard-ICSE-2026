@@ -1,4 +1,4 @@
-import { Card, Button } from "antd";
+import { Button } from "antd";
 import { theme } from "antd";
 import styles from "../Statistics.module.css"
 import { useEffect, useRef } from "react";
@@ -22,6 +22,8 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
         return () => ctx.revert();
     }, [playSignal]);
 
+
+
     const { token } = theme.useToken();
 
     return (
@@ -33,59 +35,60 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
                 <div
                     ref={containerRef}
                     className="
-                    flex-1 min-h-0
-                    grid grid-flow-dense gap-5 pt-2.5 pb-2
-                    grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4
-                    grid-rows-[100px] auto-rows-auto max:lg:grid-rows-6
-                    overflow-y-hidden
+                    flex-1 min-h-0 h-full
+                    grid gap-4 pt-2.5 pb-2
+                    grid-cols-1 sm:grid-cols-2 md:grid-cols-6 xl:grid-cols-12
+                    auto-rows-[minmax(120px,auto)] sm:auto-rows-[minmax(140px,auto)] md:auto-rows-fr xl:auto-rows-fr
+                    overflow-y-auto md:overflow-hidden
                     "
                 >
-                    <Card
+                    <div
                         style={{ backgroundColor: token.cardBg }}
-                        className={`${styles.Card} stat-card h-full`}
+                        className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0 p-0`}
                     >
                         <h1>Total Tracked Users</h1>
-                    </Card>
-                    <Card
+                        <h2></h2>
+                    </div>
+                    <div
                         style={{ backgroundColor: token.cardBg }}
-                        className={`${styles.Card} stat-card h-full`}
+                        className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0`}
+                    >
+                        <h1>Most Sponsored User</h1>
+                    </div>
+                    <div
+                        style={{ backgroundColor: token.cardBg }}
+                        className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0`}
+                    >
+                        <h1>Most Sponsoring User</h1>
+                    </div>
+                    <div
+                        style={{ backgroundColor: token.cardBg }}
+                        className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0`}
                     >
                         <h1></h1>
-                    </Card>
-                    <Card
-                        style={{ backgroundColor: token.cardBg }}
-                        className={`${styles.Card} stat-card h-full`}
-                    >
-                        <h1>Box 3</h1>
-                    </Card>
-                    <Card
-                        style={{ backgroundColor: token.cardBg }}
-                        className={`${styles.Card} stat-card h-full`}
-                    >
-                        <h1></h1>
-                    </Card>
+                    </div>
 
                     {/* Largest graph */}
-                    <Card
+                    <div
                         style={{ backgroundColor: token.cardBg }}
-                        className={`${styles.Card} stat-card h-full col-span-1 sm:col-span-3 lg:col-span-3 lg:row-start-3 xl:col-span-3 xl:row-span-2 xl:row-start-auto`}
+                        className={`${styles.Card} col-span-1 sm:col-span-2 md:col-span-4 xl:col-span-8 row-span-2 md:row-span-4 xl:row-span-6`}
                     >
                         <h1>Location Distribution of Users</h1>
-                    </Card>
+                    </div>
 
                     {/* Right-side graphs */}
-                    <Card
+                    <div
                         style={{ backgroundColor: token.cardBg }}
-                        className={`${styles.Card} stat-card h-full col-span-1 lg:col-start-3 lg:row-start-1 max:lg:row-span-2 xl:col-start-4 xl:row-start-2 xl:col-span-1`}
+                        className={`${styles.Card} col-span-1 sm:col-span-2 md:col-span-2 xl:col-span-4 row-span-2 md:row-span-2 xl:row-span-3`}
                     >
                         <h1>Gender Distribution</h1>
-                    </Card>
-                    <Card
+                    </div>
+                    <div
                         style={{ backgroundColor: token.cardBg }}
-                        className={`${styles.Card} stat-card h-full col-span-1 lg:col-start-3 lg:row-start-2 xl:col-start-4 xl:row-start-3 xl:col-span-1`}
+                        className={`${styles.Card} col-span-1 sm:col-span-2 md:col-span-2 xl:col-span-4 row-span-2 md:row-span-2 xl:row-span-3`}
                     >
                         <h1>card</h1>
-                    </Card>
+                    </div>
                 </div>
             </section>
         </>
