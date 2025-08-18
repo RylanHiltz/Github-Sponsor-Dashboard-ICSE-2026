@@ -145,7 +145,7 @@ const Leaderboard: React.FC = () => {
     }
 
     // Get leaderboard statistics every 15 seconds for live updating carousel
-    const getLeaderboardStats = async (signal?: AbortSignal) => {
+    const getLeaderboardStats = async (_signal?: AbortSignal) => {
         try {
             const response = await fetch(`${apiUrl}/api/stats/brief`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
