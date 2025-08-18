@@ -6,5 +6,6 @@ declare module 'antd/es/theme/internal' {
     interface AliasToken {
       cardBg: string;
       linkHover: string;
+      gridColor: string;
   }
 }

@@ -26,13 +26,17 @@ export const theme = {
           dark: '#9ca3af'
         },
         linkHover: {
-          light: '#7A73D1',
-          dark: '#B5A8D5'
+          light: '#3879E4',
+          dark: '#3879E4'
         }
       },
       cardBg: {
         light: '#F7F7F7',
         dark: '#1D1D1D',
+      },
+      gridColor: {
+        light: '#D1D1D1',
+        dark: '#393E46',
       }
     },
   },

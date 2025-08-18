@@ -28,15 +28,27 @@ const ThemedApp = () => {
         token: {
           // Primary Color
           colorPrimary: theme === 'dark'
-            ? themeColors.primary.dark
-            : themeColors.primary.light,
+            ? themeColors.primary.dark : themeColors.primary.light
+          ,
+
           colorBgContainer: theme === 'dark' ? '#141414' : '#fff',
+
           cardBg: theme === 'dark'
-            ? themeColors.cardBg.dark
-            : themeColors.cardBg.light,
+            ? themeColors.cardBg.dark : themeColors.cardBg.light
+          ,
+
           linkHover: theme === 'dark'
-            ? themeColors.text.linkHover.dark
-            : themeColors.text.linkHover.light,
+            ? themeColors.text.linkHover.dark : themeColors.text.linkHover.light
+          ,
+
+          gridColor: theme === 'dark'
+            ? themeColors.gridColor.dark : themeColors.gridColor.light
+          ,
+
+          colorTextSecondary: theme === 'dark'
+            ? themeColors.text.secondary.dark : themeColors.text.secondary.light
+          ,
+
         } as Partial<CustomToken>,
 
       }}
