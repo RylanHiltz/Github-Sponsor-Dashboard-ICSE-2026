@@ -16,6 +16,10 @@ export const theme = {
         light: '#f0f0f0',
         dark: '#1f1f1f'
       },
+      border: {
+        light: '#D9D9D9',
+        dark: '#2A2E31',
+      },
       text: {
         primary: {
           light: '#1f2937',
@@ -32,7 +36,7 @@ export const theme = {
       },
       cardBg: {
         light: '#F7F7F7',
-        dark: '#1D1D1D',
+        dark: '#141414',
       },
       gridColor: {
         light: '#D1D1D1',

@@ -27,27 +27,19 @@ const ThemedApp = () => {
         algorithm: theme === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
         token: {
           // Primary Color
-          colorPrimary: theme === 'dark'
-            ? themeColors.primary.dark : themeColors.primary.light
-          ,
+          colorPrimary: theme === 'dark' ? themeColors.primary.dark : themeColors.primary.light,
 
           colorBgContainer: theme === 'dark' ? '#141414' : '#fff',
 
-          cardBg: theme === 'dark'
-            ? themeColors.cardBg.dark : themeColors.cardBg.light
-          ,
+          borderColor: theme === 'dark' ? themeColors.border.dark : themeColors.border.light,
 
-          linkHover: theme === 'dark'
-            ? themeColors.text.linkHover.dark : themeColors.text.linkHover.light
-          ,
+          cardBg: theme === 'dark' ? themeColors.cardBg.dark : themeColors.cardBg.light,
 
-          gridColor: theme === 'dark'
-            ? themeColors.gridColor.dark : themeColors.gridColor.light
-          ,
+          linkHover: theme === 'dark' ? themeColors.text.linkHover.dark : themeColors.text.linkHover.light,
 
-          colorTextSecondary: theme === 'dark'
-            ? themeColors.text.secondary.dark : themeColors.text.secondary.light
-          ,
+          gridColor: theme === 'dark' ? themeColors.gridColor.dark : themeColors.gridColor.light,
+
+          colorTextSecondary: theme === 'dark' ? themeColors.text.secondary.dark : themeColors.text.secondary.light,
 
         } as Partial<CustomToken>,
 
