@@ -1,6 +1,6 @@
 -- ! MAY BE SUBJECT TO UPDATES
 
-CREATE TYPE genders AS ENUM ('Male', 'Female', 'Other', 'Unkown');
+CREATE TYPE genders AS ENUM ('Male', 'Female', 'Other', 'Unknown');
 CREATE TYPE status AS ENUM ('pending', 'completed', 'skipped', 'failed');
 
 create table public.users (
