@@ -29,7 +29,6 @@ ChartJS.register(
     Legend,
     ArcElement,
 );
-// new SimpleBar(document.querySelector('[data-simplebar]'));
 
 const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -65,26 +64,25 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
                     "
                 >
                     <div
-                        style={{ borderColor: token.colorBorder, background: token.cardBg }}
+                        style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
                         className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0 p-0`}
                     >
-                        <h1>Total Tracked Users</h1>
-                        <h2></h2>
+                        <h1 className="font-medium">Total Tracked Users</h1>
                     </div>
                     <div
-                        style={{ borderColor: token.colorBorder, background: token.cardBg }}
+                        style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
                         className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0`}
                     >
-                        <h1>Most Sponsored User</h1>
+                        <h1 className="font-medium">Most Sponsored User</h1>
                     </div>
                     <div
-                        style={{ borderColor: token.colorBorder, background: token.cardBg }}
+                        style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
                         className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0`}
                     >
-                        <h1>Most Sponsoring User</h1>
+                        <h1 className="font-medium">Most Sponsoring User</h1>
                     </div>
                     <div
-                        style={{ borderColor: token.colorBorder, background: token.cardBg }}
+                        style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
                         className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0`}
                     >
                         <h1></h1>
@@ -92,7 +90,7 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
 
                     {/* Largest graph */}
                     <div
-                        style={{ borderColor: token.colorBorder, background: token.cardBg }}
+                        style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
                         className={`${styles.Card} col-span-1 sm:col-span-2 md:col-span-4 xl:col-span-8 row-span-2 md:row-span-4 xl:row-span-6`}
                     >
                         <LocationDistributionGraph />
@@ -100,16 +98,16 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
 
                     {/* Right-side graphs */}
                     <div
-                        style={{ borderColor: token.colorBorder, background: token.cardBg }}
+                        style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
                         className={`${styles.Card} col-span-1 sm:col-span-2 md:col-span-2 xl:col-span-4 row-span-2 md:row-span-2 xl:row-span-3`}
                     >
                         <GenderDistGraph />
                     </div>
                     <div
-                        style={{ borderColor: token.colorBorder, background: token.cardBg }}
+                        style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
                         className={`${styles.Card} col-span-1 sm:col-span-2 md:col-span-2 xl:col-span-4 row-span-2 md:row-span-2 xl:row-span-3`}
                     >
-                        <h1>Sponsored Devs VS Sponsoring Devs</h1>
+                        <SponsorshipsGraph />
                     </div>
                 </div>
             </section>
@@ -117,7 +115,6 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
     );
 }
 export default UserStatsPage;
-
 
 
 // Graph foor location/gender distribution of sponsored devs
@@ -140,15 +137,19 @@ const LocationDistributionGraph = () => {
         datasets: [],
     });
 
+
     const chartOptions: ChartOptions<'bar'> = {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
             legend: {
                 display: true,
-                position: "chartArea",
+                position: "top",
+                align: "start",
                 labels: {
-                    color: token.colorTextSecondary
+                    color: token.colorTextSecondary,
+                    usePointStyle: false,
+                    padding: 3.5,
                 }
             },
             tooltip: {
@@ -173,7 +174,7 @@ const LocationDistributionGraph = () => {
 
     const getGenderData = async () => {
         try {
-            const response = await fetch(`${apiUrl}/api/user-stats`)
+            const response = await fetch(`${apiUrl}/api/user-stats`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const data = await response.json();
@@ -188,35 +189,17 @@ const LocationDistributionGraph = () => {
             const femaleData = genderDist.map(c => c.genderData.female);
             const otherData = genderDist.map(c => c.genderData.other);
             const unknownData = genderDist.map(c => c.genderData.unknown);
-            const totals = genderDist.map(c => c.genderData.male + c.genderData.female + c.genderData.other + c.genderData.unknown);
 
             const newChartData: ChartData<'bar'> = {
                 labels: labels,
                 datasets: [
-                    {
-                        label: 'Total',
-                        data: totals,
-                        // This dataset is not rendered but used by the datalabels plugin to show totals
-                        // @ts-ignore
-                        datalabels: {
-                            color: token.colorText,
-                            anchor: 'end',
-                            align: 'top',
-                            font: {
-                                weight: 'bold'
-                            },
-                            formatter: (value: number) => value > 0 ? value : ''
-                        },
-                        // Make it invisible
-                        stack: 'Stack 1', // Use a different stack to not interfere with rendering
-                    },
                     {
                         label: 'Unknown',
                         data: unknownData,
                         backgroundColor: 'rgba(156, 163, 175, 0.8)', // Gray
                         stack: 'Stack 0',
                         barPercentage: 1,
-                        categoryPercentage: 0.9,
+                        categoryPercentage: 0.8,
                     },
                     {
                         label: 'Other',
@@ -224,7 +207,7 @@ const LocationDistributionGraph = () => {
                         backgroundColor: 'rgba(75, 192, 192, 0.8)', // Bright Teal
                         stack: 'Stack 0',
                         barPercentage: 1,
-                        categoryPercentage: 0.9,
+                        categoryPercentage: 0.8,
                     },
                     {
                         label: 'Male',
@@ -232,7 +215,7 @@ const LocationDistributionGraph = () => {
                         backgroundColor: 'rgba(54, 162, 235, 0.8)', // Bright Blue
                         stack: 'Stack 0',
                         barPercentage: 1,
-                        categoryPercentage: 0.9,
+                        categoryPercentage: 0.8,
                     },
                     {
                         label: 'Female',
@@ -240,14 +223,14 @@ const LocationDistributionGraph = () => {
                         backgroundColor: 'rgba(255, 99, 132, 0.8)', // Bright Pink
                         stack: 'Stack 0',
                         barPercentage: 1,
-                        categoryPercentage: 0.9,
+                        categoryPercentage: 0.8,
                     }
                 ],
             };
             setLocationChartData(newChartData);
 
         } catch (error) {
-            console.log(error)
+            console.log(error);
         } finally {
             setIsLoading(false);
         }
@@ -258,14 +241,14 @@ const LocationDistributionGraph = () => {
     }, []);
 
     return (
-        <div className='relative flex-grow h-full pb-5'>
+        <div className={`relative flex-grow h-full pb-6`}>
             {isLoading ? (
                 <Skeleton active />
             ) : (
                 <>
-                    <h1>Location/Gender Distribution of Developers (Sponsors & Sponsored)</h1>
+                    <h1 className="font-medium pl-0.5">Location/Gender Distribution of Developers (Sponsors & Sponsored)</h1>
                     <div className={`overflow-x-auto h-full custom-scrollbar`}>
-                        <div className="min-w-[1200px] h-full">
+                        <div className="min-w-[3500px] h-full">
                             <Bar options={chartOptions} data={locationChartData} />
                         </div>
                     </div>
@@ -298,6 +281,10 @@ const GenderDistGraph = () => {
                 position: "right",
                 labels: {
                     color: token.colorTextSecondary
+                },
+                title: {
+                    display: true,
+                    text: 'User Gender Types',
                 }
             },
             tooltip: {
@@ -307,7 +294,16 @@ const GenderDistGraph = () => {
                 borderColor: '#4b5563',
                 borderWidth: 1,
                 mode: 'index',
-                intersect: false
+                intersect: false,
+                callbacks: {
+                    label: function (context) {
+                        const label = context.label || '';
+                        const value = context.raw as number;
+                        const total = context.chart.data.datasets[0].data.reduce((a, b) => (a as number) + (b as number), 0) as number || 1;
+                        const percentage = ((value / total) * 100).toFixed(1) + '%';
+                        return `${label}: ${value} (${percentage})`;
+                    }
+                }
             },
         },
     };
@@ -318,12 +314,9 @@ const GenderDistGraph = () => {
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const data = await response.json();
-            const genderData = data as genderData[];
-            const genderDist = genderData ?? [];
-            const labels = genderDist.map(c => c.gender).filter(Boolean);
-            const count = genderDist.map(c => c.count);
-
-            console.log(count);
+            const genderData = data as genderData[] || [];
+            const labels = genderData.map(c => c.gender).filter(Boolean);
+            const count = genderData.map(c => c.count);
 
             const newChartData: ChartData<'pie'> = {
                 labels: labels,
@@ -379,7 +372,112 @@ const GenderDistGraph = () => {
 
 
 const SponsorshipsGraph = () => {
+
+    interface sponsorshipData {
+        both: number;
+        sponsored: number;
+        sponsoring: number;
+    }
+    const { token } = theme.useToken();
+    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [sponsorChartData, setSponsorChartData] = useState<ChartData<'pie'>>({
+        labels: [],
+        datasets: [],
+    });
+
+    const chartOptions: ChartOptions<'pie'> = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: true,
+                position: "right",
+                labels: {
+                    color: token.colorTextSecondary
+                },
+                title: {
+                    display: true,
+                }
+            },
+            tooltip: {
+                backgroundColor: '#1f2937',
+                titleColor: '#e5e7eb',
+                bodyColor: '#fff',
+                borderColor: '#4b5563',
+                borderWidth: 1,
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                    label: function (context) {
+                        const label = context.label || '';
+                        const value = context.raw as number;
+                        const total = context.chart.data.datasets[0].data.reduce((a, b) => (a as number) + (b as number), 0) as number || 1;
+                        const percentage = ((value / total) * 100).toFixed(1) + '%';
+                        return `${label}: ${value} (${percentage})`;
+                    }
+                }
+            },
+        },
+    };
+
+    const getSponsorshipData = async () => {
+        try {
+            const response = await fetch(`${apiUrl}/api/user-sponsorship-stats`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+            const data = await response.json();
+            const sponsorsData: sponsorshipData[] = data as sponsorshipData[] || [];
+            const chartData: number[] = sponsorsData.flatMap(obj =>
+                Object.values(obj)
+            );
+            console.log(chartData);
+
+            const newChartData: ChartData<'pie'> = {
+                labels: ["Both", "Sponsored Only", "Sponsoring Only"],
+                datasets: [
+                    {
+                        label: 'Sponsoring',
+                        data: chartData,
+                        backgroundColor: [
+                            'rgba(137, 207, 240, 0.7)',   // Vaporwave Blue
+                            'rgba(255, 128, 202, 0.7)',   // Vaporwave Pink
+                            'rgba(180, 140, 255, 0.7)',   // Vaporwave Purple
+                        ],
+                        borderColor: [
+                            'rgba(137, 207, 240, 1)',
+                            'rgba(255, 128, 202, 1)',
+                            'rgba(180, 140, 255, 1)',
+                        ],
+                        borderWidth: 2,
+                    },
+                ],
+            };
+            setSponsorChartData(newChartData);
+        }
+        catch (error) {
+            console.log(error);
+        }
+        finally {
+            setIsLoading(false);
+        }
+    }
+
+    useEffect(() => {
+        getSponsorshipData();
+    }, []);
+
     return (
-        <div>UserStatistics</div>
+        <div className='relative flex-grow h-full w-full pb-5'>
+            {isLoading ? (
+                <Skeleton active />
+            ) : (
+                <>
+                    <h1 className="font-medium">Gender Distribution (Users With Pronouns)</h1>
+                    <div className="h-full p-5">
+                        <Pie options={chartOptions} data={sponsorChartData} />
+                    </div>
+                </>
+            )}
+        </div>
     )
 }
