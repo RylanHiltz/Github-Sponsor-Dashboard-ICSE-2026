@@ -66,16 +66,12 @@ const DashboardContent: React.FC = () => {
                 </div>
                 <div className='flex gap-3 pr-[20px] items-center'>
                     {/* Timer */}
-                    {
-                        location.pathname === '/request-user'
-                            ? null
-                            : (
-                                <div className={`border-[1px] flex items-center p-2 rounded-md h-[32px]`} style={{ borderColor: colorBorder }}>
-                                    <p className='text-[12px] font-medium select-none whitespace-nowrap'>Refresh in&nbsp;</p>
-                                    <Timer type='countdown' value={deadline} format="m:ss" valueStyle={{ fontSize: 12 }} />
-                                </div>
-                            )
-                    }
+                    {location.pathname === '/' && (
+                        <div className={`border-[1px] flex items-center p-2 rounded-md h-[32px]`} style={{ borderColor: colorBorder }}>
+                            <p className='text-[12px] font-medium select-none whitespace-nowrap'>Refresh in&nbsp;</p>
+                            <Timer type='countdown' value={deadline} format="m:ss" valueStyle={{ fontSize: 12 }} />
+                        </div>
+                    )}
                     {/* Darkmode Button */}
                     <DarkmodeButton />
                 </div>
