@@ -9,6 +9,7 @@ import { AiFillGithub } from "react-icons/ai";
 import { MdSpaceDashboard } from "react-icons/md";
 import { MdPersonAddAlt1 } from "react-icons/md";
 import { IoMdStats } from "react-icons/io";
+import { IoDocumentText } from "react-icons/io5";
 
 
 
@@ -31,6 +32,7 @@ const DashboardContent: React.FC = () => {
         '1': '/',
         '2': '/statistics',
         '3': '/request-user',
+        '4': '/docs'
     };
 
     const menuKeyMap = Object.fromEntries(
@@ -64,10 +66,16 @@ const DashboardContent: React.FC = () => {
                 </div>
                 <div className='flex gap-3 pr-[20px] items-center'>
                     {/* Timer */}
-                    <div className={`border-[1px] flex items-center p-2 rounded-md h-[32px]`} style={{ borderColor: colorBorder }}>
-                        <p className='text-[12px] font-medium select-none whitespace-nowrap'>Refresh in&nbsp;</p>
-                        <Timer type='countdown' value={deadline} format="m:ss" valueStyle={{ fontSize: 12 }}></Timer>
-                    </div>
+                    {
+                        location.pathname === '/request-user'
+                            ? null
+                            : (
+                                <div className={`border-[1px] flex items-center p-2 rounded-md h-[32px]`} style={{ borderColor: colorBorder }}>
+                                    <p className='text-[12px] font-medium select-none whitespace-nowrap'>Refresh in&nbsp;</p>
+                                    <Timer type='countdown' value={deadline} format="m:ss" valueStyle={{ fontSize: 12 }} />
+                                </div>
+                            )
+                    }
                     {/* Darkmode Button */}
                     <DarkmodeButton />
                 </div>
@@ -86,18 +94,23 @@ const DashboardContent: React.FC = () => {
                         items={[
                             {
                                 key: '1',
-                                label: 'Dashboard',
+                                label: 'Overview',
                                 icon: <MdSpaceDashboard />
                             },
                             {
                                 key: '2',
-                                label: 'Statistics',
+                                label: 'Analytics',
                                 icon: <IoMdStats />
                             },
                             {
                                 key: '3',
                                 label: 'Request User',
                                 icon: <MdPersonAddAlt1 />
+                            },
+                            {
+                                key: '4',
+                                label: 'Docs',
+                                icon: <IoDocumentText />
                             },
                         ]}
                     />
