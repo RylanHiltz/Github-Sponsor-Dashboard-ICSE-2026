@@ -13,12 +13,12 @@ export default function Statistics() {
             children: <></>,
         },
         {
-            label: "User Stats",
+            label: "User Analytics",
             key: "2",
             children: <UserStatsPage playSignal={userStatsTick} />,
         },
         {
-            label: "Organization Stats",
+            label: "Organization Analytics",
             key: "3",
             children: <></>,
         },

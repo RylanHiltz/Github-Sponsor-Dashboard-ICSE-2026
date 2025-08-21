@@ -3,9 +3,15 @@
 @tailwind utilities;
 
 .Card {
-  @apply bg-[#1D1D1D];
+  @apply p-4 rounded-lg border-[1px];
 }
 
+/* Title for grid Cards */
 .Card h1 {
   @apply text-[16px];
+}
+
+/* Bottom text on simple stats */
+.Card h2 {
+  @apply text-[20px] font-semibold;
 }
