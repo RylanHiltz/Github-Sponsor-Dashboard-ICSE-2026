@@ -2,7 +2,7 @@ import React, { useEffect } from 'react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import styles from "./User.module.css"
-import { Button, Skeleton } from 'antd'
+import { Button, Skeleton, theme } from 'antd'
 import { apiUrl } from '../../api'
 import { Line } from 'react-chartjs-2';
 import { IoChevronBackOutline } from "react-icons/io5";
@@ -35,6 +35,7 @@ ChartJS.register(
 
 const User: React.FC = () => {
 
+    const { token } = theme.useToken();
     const { id } = useParams<{ id: string }>();
     const [user, setUser] = useState<UserModel>();
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -51,11 +52,14 @@ const User: React.FC = () => {
         plugins: {
             legend: {
                 display: true,
+                labels: {
+                    color: token.colorTextSecondary
+                }
             },
             tooltip: {
                 backgroundColor: '#1f2937',
                 titleColor: '#e5e7eb',
-                bodyColor: '#d1d5db',
+                bodyColor: '#fff',
                 borderColor: '#4b5563',
                 borderWidth: 1,
                 mode: 'index',
@@ -67,14 +71,14 @@ const User: React.FC = () => {
                 display: true,
                 title: {
                     display: true,
-                    text: 'Years'
+                    text: 'Years Since Account Creation'
                 },
                 ticks: { color: '#9ca3af' },
-                grid: { color: '#374151' },
+                grid: { color: token.gridColor },
             },
             y: {
                 ticks: { color: '#9ca3af' },
-                grid: { color: '#374151' },
+                grid: { color: token.gridColor },
                 suggestedMin: 0,
             },
         },
@@ -180,7 +184,7 @@ const User: React.FC = () => {
                 <div className="flex flex-col h-full px-5 gap-5">
                     <Button className='w-min' type='text' onClick={navigateLeaderboard}><IoChevronBackOutline /> Back To Dashboard</Button>
                     <section className='flex-grow grid grid-cols-[_2fr,30em] grid-rows-[_3fr,_3fr] gap-5'>
-                        <div className={`${styles.profileCard} row-span-1 flex flex-col justify-between`}>
+                        <div className={`${styles.profileCard} row-span-1 flex flex-col justify-between border-solid]`} style={{ borderColor: token.colorBorder }}>
                             <div className='flex flex-col gap-3'>
                                 <div className='flex items-center gap-4'>
                                     {isLoading == false ? (
@@ -203,9 +207,9 @@ const User: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {user?.bio && <p className='text-gray-300 text-base'>{user?.bio}</p>}
+                                {user?.bio && <p className='text-base'>{user?.bio}</p>}
 
-                                <div className='flex flex-col gap-1 text-gray-300 mt-2'>
+                                <div className='flex flex-col gap-1  mt-2'>
                                     {user?.company && (
                                         <span className='flex items-center gap-2'>
                                             <p>Company</p>
@@ -238,19 +242,19 @@ const User: React.FC = () => {
                                     )}
                                 </div>
                             </div>
-                            <div className='flex gap-4 text-base text-gray-300 justify-between'>
+                            <div className='flex gap-4 text-base justify-between'>
                                 <div className='flex gap-2'>
-                                    <span><span className='font-bold text-white'>{user?.followers}</span> followers</span>
+                                    <span><span className='font-bold '>{user?.followers}</span> followers</span>
                                     <span>·</span>
-                                    <span><span className='font-bold text-white'>{user?.following}</span> following</span>
+                                    <span><span className='font-bold '>{user?.following}</span> following</span>
                                 </div>
-                                <Button className='font-bold text-white' href={user?.profile_url} target='_blank' type='link'>Visit Profile</Button>
+                                <Button className='font-bold ' href={user?.profile_url} target='_blank' type='link'>Visit Profile</Button>
                             </div>
                         </div>
 
 
                         {/*  */}
-                        <div className={`${styles.profileCard} row-span-3 p-6`}>
+                        <div className={`${styles.profileCard} row-span-3 p-6`} style={{ borderColor: token.colorBorder }}>
                             <div className="flex flex-col h-full gap-5 justify-evenly">
                                 {(() => {
                                     const StatRow = ({ label, value, format }: { label: string, value: any, format?: 'currency' | 'date' | 'number' }) => {
@@ -272,9 +276,9 @@ const User: React.FC = () => {
                                             <div className="flex justify-between items-center py-2.5 border-b border-[#434343] last:border-b-0">
                                                 <p className="text-gray-400 text-sm">{label}</p>
                                                 {isLoading ? (
-                                                    <Skeleton.Input active={true} size="small" style={{ width: 100, background: '#333' }} />
+                                                    <Skeleton.Input active={true} size="small" style={{ width: 100 }} />
                                                 ) : (
-                                                    <p className="text-base font-semibold text-white">{displayValue}</p>
+                                                    <p className="text-base font-semibold ">{displayValue}</p>
                                                 )}
                                             </div>
                                         );
@@ -283,8 +287,8 @@ const User: React.FC = () => {
                                     return (
                                         <>
                                             <div>
-                                                <h2 className="text-lg font-semibold text-white mb-2">User Activity</h2>
-                                                <div className="bg-[#262626] rounded-lg px-4">
+                                                <h2 className="text-lg font-semibold  mb-2">User Activity</h2>
+                                                <div className="rounded-lg pl-4">
                                                     <StatRow label="Total Commits" value={user?.total_commits} />
                                                     <StatRow label="Total Issues" value={user?.total_issues} />
                                                     <StatRow label="Total Pull Requests" value={user?.total_pull_requests} />
@@ -293,8 +297,8 @@ const User: React.FC = () => {
                                             </div>
 
                                             <div>
-                                                <h2 className="text-lg font-semibold text-white mb-2">Sponsorships</h2>
-                                                <div className="bg-[#262626] rounded-lg px-4">
+                                                <h2 className="text-lg font-semibold  mb-2">Sponsorships</h2>
+                                                <div className="rounded-lg pl-4">
                                                     <StatRow label="Sponsors" value={user?.total_sponsors} />
                                                     <StatRow label="Sponsoring" value={user?.total_sponsoring} />
                                                     <StatRow label="Minimum Tier" value={user?.min_sponsor_cost} format="currency" />
@@ -303,8 +307,8 @@ const User: React.FC = () => {
                                             </div>
 
                                             <div>
-                                                <h2 className="text-lg font-semibold text-white mb-2">Account Data</h2>
-                                                <div className="bg-[#262626] rounded-lg px-4">
+                                                <h2 className="text-lg font-semibold mb-2">Account Data</h2>
+                                                <div className="rounded-lg pl-4">
                                                     <StatRow label="Public Repositories" value={user?.public_repos} />
                                                     <StatRow label="Public Gists" value={user?.public_gists} />
                                                     <StatRow label="Account Created" value={user?.github_created_at} format="date" />
@@ -318,7 +322,7 @@ const User: React.FC = () => {
                         </div>
 
                         {/* Visualized user activity graph section */}
-                        <div className={`${styles.profileCard} row-span-2 flex flex-col gap-5 p-5 h-full`}>
+                        <div className={`${styles.profileCard} row-span-2 flex flex-col gap-5 p-5 h-full`} style={{ borderColor: token.colorBorder }}>
                             <h2 className="text-xl font-semibold">Visualized User Activity</h2>
                             <div className='relative flex-grow'>
                                 {isLoading ? (
