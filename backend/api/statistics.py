@@ -89,3 +89,83 @@ def get_stats():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@stats_bp.route("/api/user-stats", methods=["GET"])
+def get_location_dist():
+    try:
+        conn = db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        cur.execute(
+            """
+            WITH sponsored_user_ids AS (
+                -- First, get a distinct list of all user IDs involved in sponsorships
+                SELECT sponsored_id AS user_id FROM sponsorship
+                UNION
+                SELECT sponsor_id AS user_id FROM sponsorship
+            ),
+            user_gender_by_country AS (
+                -- Then, join that list with the users table
+                SELECT
+                    u.location AS country,
+                    -- Use the more efficient FILTER clause for conditional aggregation
+                    COUNT(*) FILTER (WHERE u.gender = 'Male') AS male,
+                    COUNT(*) FILTER (WHERE u.gender = 'Female') AS female,
+                    COUNT(*) FILTER (WHERE u.gender = 'Other') AS other,
+                    COUNT(*) FILTER (WHERE u.gender = 'Unknown' OR u.gender IS NULL) AS unknown
+                FROM users u
+                JOIN sponsored_user_ids s ON u.id = s.user_id
+                WHERE u.location IS NOT NULL
+                GROUP BY u.location
+            )
+            SELECT
+                ug.country,
+                json_build_object(
+                    'male', ug.male,
+                    'female', ug.female,
+                    'other', ug.other,
+                    'unknown', ug.unknown
+                ) AS "genderData"
+            FROM user_gender_by_country ug
+            ORDER BY (ug.male + ug.female + ug.other + ug.unknown) DESC;
+            """
+        )
+        stats = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        return jsonify(stats), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Get Gender Distribution
+@stats_bp.route("/api/gender-stats", methods=["GET"])
+def get_gender_stats():
+    try:
+        conn = db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        cur.execute(
+            """
+            WITH active_users AS (
+            SELECT sponsor_id AS user_id FROM sponsorship
+            UNION
+            SELECT sponsored_id AS user_id FROM sponsorship
+            )
+            SELECT 
+            COALESCE(u.gender, 'Unknown') AS gender,
+            COUNT(*) AS count
+            FROM users u
+            JOIN active_users au ON u.id = au.user_id
+            WHERE (u.type = 'User') AND (u.has_pronouns = TRUE)
+            GROUP BY COALESCE(u.gender, 'Unknown');
+            """
+        )
+        stats = cur.fetchall()
+        cur.close()
+        conn.close()
+        return jsonify(stats), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
