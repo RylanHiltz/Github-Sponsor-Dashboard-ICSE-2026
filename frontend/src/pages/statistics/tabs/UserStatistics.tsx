@@ -247,6 +247,7 @@ const LocationDistributionGraph = () => {
                         stack: 'Stack 0',
                         barPercentage: 1,
                         categoryPercentage: 0.8,
+                        borderRadius: 6,
                     },
                     {
                         label: 'Other',
@@ -255,6 +256,7 @@ const LocationDistributionGraph = () => {
                         stack: 'Stack 0',
                         barPercentage: 1,
                         categoryPercentage: 0.8,
+                        borderRadius: 6,
                     },
                     {
                         label: 'Male',
@@ -263,6 +265,7 @@ const LocationDistributionGraph = () => {
                         stack: 'Stack 0',
                         barPercentage: 1,
                         categoryPercentage: 0.8,
+                        borderRadius: 6,
                     },
                     {
                         label: 'Female',
@@ -271,6 +274,7 @@ const LocationDistributionGraph = () => {
                         stack: 'Stack 0',
                         barPercentage: 1,
                         categoryPercentage: 0.8,
+                        borderRadius: 6,
                     }
                 ],
             };
@@ -292,18 +296,10 @@ const LocationDistributionGraph = () => {
             {isLoading ? (
                 <Skeleton active />
             ) : (
-                // <>
-                //     <h1 className="font-medium pl-0.5 pb-3 text-nowrap">Location/Gender Distribution of Developers (Sponsors & Sponsored)</h1>
-                //     <div className={`overflow-x-auto h-full custom-scrollbar`}>
-                //         <div className="min-w-[3500px] h-full">
-                //             <Bar options={chartOptions} data={locationChartData} />
-                //         </div>
-                //     </div>
-                // </>
                 <>
                     <div className={`overflow-x-auto h-full custom-scrollbar overflow-y-hidden`}>
-                        <h1 className="font-medium pl-0.5 text-nowrap">Location/Gender Distribution of Developers (Sponsors & Sponsored)</h1>
-                        <div className="min-w-[3500px] h-full">
+                        <h1 className="font-medium pl-0.5 text-nowrap pb-3">Location/Gender Distribution of Developers (Sponsors & Sponsored)</h1>
+                        <div className="min-w-[3500px] h-full pb-10">
                             <Bar options={chartOptions} data={locationChartData} />
                         </div>
                     </div>
