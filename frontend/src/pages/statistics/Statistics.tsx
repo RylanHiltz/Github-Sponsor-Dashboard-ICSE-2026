@@ -2,6 +2,8 @@ import { Tabs, Button } from "antd";
 import { useState } from "react";
 
 import UserStatsPage from "./tabs/UserStatistics";
+import OrgStatsPage from "./tabs/OrgStatistics";
+import GeneralStatsPage from "./tabs/GeneralStatistics";
 
 export default function Statistics() {
     const [userStatsTick, setUserStatsTick] = useState(0);
@@ -10,7 +12,7 @@ export default function Statistics() {
         {
             label: "Overall Statistics",
             key: "1",
-            children: <></>,
+            children: <GeneralStatsPage playSignal={userStatsTick} />,
         },
         {
             label: "User Analytics",
@@ -52,6 +54,8 @@ export default function Statistics() {
                     items={data}
                     onChange={(key) => {
                         if (key === "2") setUserStatsTick((v) => v + 1);
+                        if (key === "1") setUserStatsTick((v) => v + 1);
+                        if (key === "3") setUserStatsTick((v) => v + 1);
                     }}
                 />
             </div>

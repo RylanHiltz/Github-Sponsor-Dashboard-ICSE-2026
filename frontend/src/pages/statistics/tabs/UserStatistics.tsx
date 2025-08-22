@@ -4,7 +4,7 @@ import styles from "../Statistics.module.css"
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { apiUrl } from "../../../api";
-import { Bar, Pie } from "react-chartjs-2";
+import { Bar, Pie, Doughnut } from "react-chartjs-2";
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -30,7 +30,38 @@ ChartJS.register(
     ArcElement,
 );
 
+
 const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
+
+    interface BriefStats {
+        most_sponsored_user: {
+            avatar_url: string;
+            total_sponsors: number;
+            username: string;
+        },
+        most_sponsoring_user: {
+            avatar_url: string;
+            total_sponsors: number;
+            username: string;
+        },
+        top_country: {
+            country: string;
+            sponsored_users: number;
+        },
+        total_users: number;
+    }
+
+    const [briefData, setBriefData] = useState<BriefStats>();
+    const getBrief = async () => {
+
+        const response = await fetch(`${apiUrl}/api/brief-user-stats`);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        const data = await response.json() as BriefStats;
+        console.log(data)
+        setBriefData(data);
+    }
+
     const containerRef = useRef<HTMLDivElement>(null);
     const { token } = theme.useToken();
     useEffect(() => {
@@ -46,6 +77,10 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
         }, containerRef);
         return () => ctx.revert();
     }, [playSignal]);
+
+    useEffect(() => {
+        getBrief();
+    }, []);
 
     return (
         <>
@@ -68,24 +103,38 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
                         className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0 p-0`}
                     >
                         <h1 className="font-medium">Total Tracked Users</h1>
+                        <h2 style={{ color: token.colorTextSecondary }}>{briefData?.total_users}</h2>
                     </div>
                     <div
                         style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
                         className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0`}
                     >
                         <h1 className="font-medium">Most Sponsored User</h1>
+                        <span className='flex items-center justify-start gap-2'>
+                            <img src={briefData?.most_sponsored_user.avatar_url} alt={briefData?.most_sponsored_user.username} className='w-8 h-8 rounded-full' />
+                            <h2 style={{ color: token.colorTextSecondary }} className='pb-1 text-[18px] font-semibold'>{briefData?.most_sponsored_user.username}</h2>
+                        </span>
                     </div>
                     <div
                         style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
                         className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0`}
                     >
                         <h1 className="font-medium">Most Sponsoring User</h1>
+                        <span className='flex items-center justify-start gap-2'>
+                            <img src={briefData?.most_sponsoring_user.avatar_url} alt={briefData?.most_sponsoring_user.username} className='w-8 h-8 rounded-full' />
+                            <h2 style={{ color: token.colorTextSecondary }} className='pb-1 text-[18px] font-semibold'>{briefData?.most_sponsoring_user.username}</h2>
+                        </span>
                     </div>
                     <div
                         style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
                         className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0`}
                     >
-                        <h1></h1>
+                        <h1 className="font-medium">Most Sponsored Country</h1>
+                        <span className="flex gap-2 text-center items-center">
+                            <h2 style={{ color: token.colorTextSecondary }}>{briefData?.top_country.country}</h2>
+                            <span>·</span>
+                            <p style={{ color: token.colorTextSecondary }} className="text-[14px] font-medium pt-0.5">{briefData?.top_country.sponsored_users} Users</p>
+                        </span>
                     </div>
 
                     {/* Largest graph */}
@@ -101,7 +150,7 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
                         style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
                         className={`${styles.Card} col-span-1 sm:col-span-2 md:col-span-2 xl:col-span-4 row-span-2 md:row-span-2 xl:row-span-3`}
                     >
-                        <GenderDistGraph />
+                        <GenderDataGraph />
                     </div>
                     <div
                         style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
@@ -179,16 +228,14 @@ const LocationDistributionGraph = () => {
 
             const data = await response.json();
 
-            const genderData = data as userLocations[];
+            const genderData = data as userLocations[] ?? [];
             console.log("API Response:", genderData);
 
-            const genderDist = genderData ?? [];
-
-            const labels = genderDist.map(c => c.country).filter(Boolean);
-            const maleData = genderDist.map(c => c.genderData.male);
-            const femaleData = genderDist.map(c => c.genderData.female);
-            const otherData = genderDist.map(c => c.genderData.other);
-            const unknownData = genderDist.map(c => c.genderData.unknown);
+            const labels = genderData.map(c => c.country).filter(Boolean);
+            const maleData = genderData.map(c => c.genderData.male);
+            const femaleData = genderData.map(c => c.genderData.female);
+            const otherData = genderData.map(c => c.genderData.other);
+            const unknownData = genderData.map(c => c.genderData.unknown);
 
             const newChartData: ChartData<'bar'> = {
                 labels: labels,
@@ -241,13 +288,21 @@ const LocationDistributionGraph = () => {
     }, []);
 
     return (
-        <div className={`relative flex-grow h-full pb-6`}>
+        <div className={`relative flex-grow h-full`}>
             {isLoading ? (
                 <Skeleton active />
             ) : (
+                // <>
+                //     <h1 className="font-medium pl-0.5 pb-3 text-nowrap">Location/Gender Distribution of Developers (Sponsors & Sponsored)</h1>
+                //     <div className={`overflow-x-auto h-full custom-scrollbar`}>
+                //         <div className="min-w-[3500px] h-full">
+                //             <Bar options={chartOptions} data={locationChartData} />
+                //         </div>
+                //     </div>
+                // </>
                 <>
-                    <h1 className="font-medium pl-0.5">Location/Gender Distribution of Developers (Sponsors & Sponsored)</h1>
-                    <div className={`overflow-x-auto h-full custom-scrollbar`}>
+                    <div className={`overflow-x-auto h-full custom-scrollbar overflow-y-hidden`}>
+                        <h1 className="font-medium pl-0.5 text-nowrap">Location/Gender Distribution of Developers (Sponsors & Sponsored)</h1>
                         <div className="min-w-[3500px] h-full">
                             <Bar options={chartOptions} data={locationChartData} />
                         </div>
@@ -259,7 +314,7 @@ const LocationDistributionGraph = () => {
 }
 
 
-const GenderDistGraph = () => {
+const GenderDataGraph = () => {
     // Interface for api 
     interface genderData {
         count: number;
@@ -267,12 +322,12 @@ const GenderDistGraph = () => {
     }
     const { token } = theme.useToken();
     const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [locationChartData, setLocationChartData] = useState<ChartData<'pie'>>({
+    const [locationChartData, setLocationChartData] = useState<ChartData<'doughnut'>>({
         labels: [],
         datasets: [],
     });
 
-    const chartOptions: ChartOptions<'pie'> = {
+    const chartOptions: ChartOptions<'doughnut'> = {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
@@ -288,7 +343,7 @@ const GenderDistGraph = () => {
                 }
             },
             tooltip: {
-                backgroundColor: '#1f2937',
+                backgroundColor: '#292c30',
                 titleColor: '#e5e7eb',
                 bodyColor: '#fff',
                 borderColor: '#4b5563',
@@ -318,23 +373,21 @@ const GenderDistGraph = () => {
             const labels = genderData.map(c => c.gender).filter(Boolean);
             const count = genderData.map(c => c.count);
 
-            const newChartData: ChartData<'pie'> = {
+            const newChartData: ChartData<'doughnut'> = {
                 labels: labels,
                 datasets: [
                     {
                         label: 'Gender',
                         data: count,
                         backgroundColor: [
-                            'rgba(54, 162, 235, 0.5)', // Male
+                            'rgba(55, 135, 188, 0.5)', // Male
                             'rgba(75, 192, 192, 0.5)', // Other
                             'rgba(255, 99, 132, 0.5)', // Female
-                            'rgba(156, 163, 175, 0.5)', // Unknown
                         ],
                         borderColor: [
                             'rgba(54, 162, 235, 1)',
                             'rgba(75, 192, 192, 1)',
                             'rgba(255, 99, 132, 1)',
-                            'rgba(156, 163, 175, 1)',
                         ],
                         borderWidth: 2,
                     },
@@ -361,7 +414,7 @@ const GenderDistGraph = () => {
                 <>
                     <h1 className="font-medium">Gender Distribution (Users With Pronouns)</h1>
                     <div className="h-full p-5">
-                        <Pie options={chartOptions} data={locationChartData} />
+                        <Doughnut options={chartOptions} data={locationChartData} />
                     </div>
                 </>
             )}
@@ -372,7 +425,6 @@ const GenderDistGraph = () => {
 
 
 const SponsorshipsGraph = () => {
-
     interface sponsorshipData {
         both: number;
         sponsored: number;
@@ -380,12 +432,12 @@ const SponsorshipsGraph = () => {
     }
     const { token } = theme.useToken();
     const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [sponsorChartData, setSponsorChartData] = useState<ChartData<'pie'>>({
+    const [sponsorChartData, setSponsorChartData] = useState<ChartData<'doughnut'>>({
         labels: [],
         datasets: [],
     });
 
-    const chartOptions: ChartOptions<'pie'> = {
+    const chartOptions: ChartOptions<'doughnut'> = {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
@@ -397,6 +449,7 @@ const SponsorshipsGraph = () => {
                 },
                 title: {
                     display: true,
+                    text: "Sponsorship Type",
                 }
             },
             tooltip: {
@@ -432,16 +485,16 @@ const SponsorshipsGraph = () => {
             );
             console.log(chartData);
 
-            const newChartData: ChartData<'pie'> = {
-                labels: ["Both", "Sponsored Only", "Sponsoring Only"],
+            const newChartData: ChartData<'doughnut'> = {
+                labels: ["Both", "Sponsored", "Sponsoring"],
                 datasets: [
                     {
                         label: 'Sponsoring',
                         data: chartData,
                         backgroundColor: [
-                            'rgba(137, 207, 240, 0.7)',   // Vaporwave Blue
-                            'rgba(255, 128, 202, 0.7)',   // Vaporwave Pink
-                            'rgba(180, 140, 255, 0.7)',   // Vaporwave Purple
+                            'rgba(93, 138, 159, 0.7)',
+                            'rgba(181, 97, 146, 0.7)',
+                            'rgba(117, 91, 165, 0.7)',
                         ],
                         borderColor: [
                             'rgba(137, 207, 240, 1)',
@@ -472,9 +525,9 @@ const SponsorshipsGraph = () => {
                 <Skeleton active />
             ) : (
                 <>
-                    <h1 className="font-medium">Gender Distribution (Users With Pronouns)</h1>
+                    <h1 className="font-medium">Sponsored & Sponsoring User Percentages</h1>
                     <div className="h-full p-5">
-                        <Pie options={chartOptions} data={sponsorChartData} />
+                        <Doughnut options={chartOptions} data={sponsorChartData} />
                     </div>
                 </>
             )}
