@@ -52,14 +52,23 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
     }
 
     const [briefData, setBriefData] = useState<BriefStats>();
+    const [isLoading, setIsLoading] = useState(true);
+
     const getBrief = async () => {
 
-        const response = await fetch(`${apiUrl}/api/brief-user-stats`);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        try {
+            const response = await fetch(`${apiUrl}/api/brief-user-stats`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
-        const data = await response.json() as BriefStats;
-        console.log(data)
-        setBriefData(data);
+            const data = await response.json() as BriefStats;
+            console.log(data)
+            setBriefData(data);
+        } catch (error) {
+            console.log(error);
+        }
+        finally {
+            setIsLoading(false);
+        }
     }
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -100,41 +109,65 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
                 >
                     <div
                         style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
-                        className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0 p-0`}
+                        className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0 p-0 overflow-y-hidden`}
                     >
-                        <h1 className="font-medium">Total Tracked Users</h1>
-                        <h2 style={{ color: token.colorTextSecondary }}>{briefData?.total_users}</h2>
+                        {isLoading ? (
+                            <Skeleton active />
+                        ) : (
+                            <>
+                                <h1 className="font-medium">Total Tracked Users</h1>
+                                <h2 style={{ color: token.colorTextSecondary }}>{briefData?.total_users}</h2>
+                            </>
+                        )}
                     </div>
                     <div
                         style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
-                        className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0`}
+                        className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0 overflow-y-hidden`}
                     >
-                        <h1 className="font-medium">Most Sponsored User</h1>
-                        <span className='flex items-center justify-start gap-2'>
-                            <img src={briefData?.most_sponsored_user.avatar_url} alt={briefData?.most_sponsored_user.username} className='w-8 h-8 rounded-full' />
-                            <h2 style={{ color: token.colorTextSecondary }} className='pb-1 text-[18px] font-semibold'>{briefData?.most_sponsored_user.username}</h2>
-                        </span>
+                        {isLoading ? (
+                            <Skeleton active />
+                        ) : (
+                            <>
+                                <h1 className="font-medium">Most Sponsored User</h1>
+                                <span className='flex items-center justify-start gap-2'>
+                                    <img src={briefData?.most_sponsored_user.avatar_url} alt={briefData?.most_sponsored_user.username} className='w-8 h-8 rounded-full' />
+                                    <h2 style={{ color: token.colorTextSecondary }} className='pb-1 text-[18px] font-semibold'>{briefData?.most_sponsored_user.username}</h2>
+                                </span>
+                            </>
+                        )}
                     </div>
                     <div
                         style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
-                        className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0`}
+                        className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0 overflow-y-hidden`}
                     >
-                        <h1 className="font-medium">Most Sponsoring User</h1>
-                        <span className='flex items-center justify-start gap-2'>
-                            <img src={briefData?.most_sponsoring_user.avatar_url} alt={briefData?.most_sponsoring_user.username} className='w-8 h-8 rounded-full' />
-                            <h2 style={{ color: token.colorTextSecondary }} className='pb-1 text-[18px] font-semibold'>{briefData?.most_sponsoring_user.username}</h2>
-                        </span>
+                        {isLoading ? (
+                            <Skeleton active />
+                        ) : (
+                            <>
+                                <h1 className="font-medium">Most Sponsoring User</h1>
+                                <span className='flex items-center justify-start gap-2'>
+                                    <img src={briefData?.most_sponsoring_user.avatar_url} alt={briefData?.most_sponsoring_user.username} className='w-8 h-8 rounded-full' />
+                                    <h2 style={{ color: token.colorTextSecondary }} className='pb-1 text-[18px] font-semibold'>{briefData?.most_sponsoring_user.username}</h2>
+                                </span>
+                            </>
+                        )}
                     </div>
                     <div
                         style={{ borderColor: token.colorBorder, backgroundColor: token.cardBg }}
-                        className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0`}
+                        className={`${styles.Card} col-span-1 sm:col-span-1 md:col-span-3 xl:col-span-3 min-h-[120px] md:min-h-0 overflow-y-hidden`}
                     >
-                        <h1 className="font-medium">Most Sponsored Country</h1>
-                        <span className="flex gap-2 text-center items-center">
-                            <h2 style={{ color: token.colorTextSecondary }}>{briefData?.top_country.country}</h2>
-                            <span>·</span>
-                            <p style={{ color: token.colorTextSecondary }} className="text-[14px] font-medium pt-0.5">{briefData?.top_country.sponsored_users} Users</p>
-                        </span>
+                        {isLoading ? (
+                            <Skeleton active />
+                        ) : (
+                            <>
+                                <h1 className="font-medium">Most Sponsored Country</h1>
+                                <span className="flex gap-2 text-center items-center">
+                                    <h2 style={{ color: token.colorTextSecondary }}>{briefData?.top_country.country}</h2>
+                                    <span>·</span>
+                                    <p style={{ color: token.colorTextSecondary }} className="text-[14px] font-medium pt-0.5">{briefData?.top_country.sponsored_users} Users</p>
+                                </span>
+                            </>
+                        )}
                     </div>
 
                     {/* Largest graph */}
