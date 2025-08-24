@@ -14,3 +14,7 @@ auth.json
 # Log file of for scraper debugging
 scraper.log
 scraper.log.*
+
+# This file keeps track of the init. of the worker
+# Will be created upon runtime if it doesnt exist
+worker_state.json

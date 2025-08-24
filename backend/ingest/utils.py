@@ -1,6 +1,7 @@
 import time
 import logging
 import base64
+from datetime import timedelta, datetime
 from dotenv import load_dotenv
 from backend.utils.github_api import postRequest
 
@@ -61,6 +62,7 @@ def get_sponsors_from_api(github_id, user_type):
     response = None
 
     # Dynamic query template for the Github GraphQL API
+    # snippet-start: GraphQL-Sponsor-Query
     query_template = f"""
     query($nodeId: ID!, $cursor: String) {{
       node(id: $nodeId) {{
@@ -91,6 +93,7 @@ def get_sponsors_from_api(github_id, user_type):
       }}
     }}
     """
+    # snippet-end
 
     print(f"Starting Sponsors Fetch for {user_type} ''")
     start_time = time.time()
@@ -260,60 +263,143 @@ def get_sponsored_from_api(github_id, user_type):
     return sponsored_list
 
 
-# Use scraper to visit githubs sponsor board to retrieve new sponsors
-# Appends to the database
-def getNewRoots():
+# Recursively queries the Github GraphQL API to collect users who are sponsorable
+def getSponsorableUsers(db, init: bool):
+    """Retrieve GitHub account IDs for accounts that are sponsorable by querying the GitHub GraphQL API.
 
-    # List of unique usernames scraped by the
-    username_list = set()
+    This function coordinates with the provided database connection and the GitHub GraphQL
+    endpoint to collect account identifiers for entities whose "isSponsorable" flag is true.
+    Behaviour is controlled by the `init` flag:
 
-    with sync_playwright() as p:
+    Parameters
+    ----------
+    db : object
+        Database connection or session used to read/write state related to worker.py.
+        Expected to be a DB-API/ORM session (for example, a SQLAlchemy Session) or an
+        application-specific connection object. The function may read from and/or update
+        tables that track last-run timestamps, pagination cursors, or fetched identifiers.
+    init : bool
+        Worker initialization flag:
+        - **True:** full collection mode (collect all possible sponsorable user IDs).
+        - **False:** incremental mode (collect a recent, bounded set - 2000 by default).
+    """
 
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(SPONSORS_URL)
+    sort_clause = ""
+    if not init:
+        sort_clause = "sort:joined-desc"
 
-        # Wait for the initial content to load
-        page.wait_for_selector("turbo-frame[id='sponsors-featured-accounts'] article")
-        start = time.time()
+    # helper to page through a search query (when userCount <= 1000)
+    def fetch_and_queue(search_query):
+        cursor = None
+        has_next = True
+        total_fetched = 0
+        while has_next:
+            variables = {"cursor": cursor}
+            query = {
+                "query": f"""
+                query($cursor: String) {{
+                  search(query: "{search_query}", type: USER, first: 100, after: $cursor) {{
+                    userCount
+                    pageInfo {{ endCursor hasNextPage }}
+                    edges {{
+                      node {{
+                        ... on User {{ databaseId }}
+                        ... on Organization {{ databaseId }}
+                      }}
+                    }}
+                  }}
+                }}
+                """,
+                "variables": variables,
+            }
+            resp = postRequest(url=URL, json=query)
+            data = resp.json()
+            if "errors" in data:
+                logging.error("GraphQL errors: %s", data["errors"])
+                return 0, True  # signal error to caller
 
-        while len(username_list) < 500:
-            # Scrape usernames from the current view
-            usernames = page.query_selector_all(
-                "turbo-frame[id='sponsors-featured-accounts'] article"
+            search = data.get("data", {}).get("search", {})
+            edges = search.get("edges", [])
+            user_ids = []
+            for edge in edges:
+                node = edge.get("node", {})
+                dbid = node.get("databaseId")
+                if dbid:
+                    user_ids.append(dbid)
+
+            if user_ids:
+                batchAddQueue(user_ids, 1, db)
+                total_fetched += len(user_ids)
+
+            page_info = search.get("pageInfo", {})
+            has_next = page_info.get("hasNextPage", False)
+            cursor = page_info.get("endCursor")
+        return total_fetched, False
+
+    # adaptive recursive splitter for date ranges
+    def fetch_range(start_date: datetime, end_date: datetime):
+        # Build search qualifier with created range
+        created_q = f"created:{start_date.date()}..{end_date.date()}"
+        search_query = f"is:sponsorable {created_q} {sort_clause}".strip()
+
+        # initial count probe (first page)
+        variables = {"cursor": None}
+        probe_query = {
+            "query": f"""
+            query($cursor: String) {{
+              search(query: "{search_query}", type: USER, first: 1, after: $cursor) {{
+                userCount
+              }}
+            }}
+            """,
+            "variables": variables,
+        }
+        resp = postRequest(url=URL, json=probe_query)
+        data = resp.json()
+        if "errors" in data:
+            logging.error("GraphQL errors during probe: %s", data["errors"])
+            return 0
+
+        user_count = data.get("data", {}).get("search", {}).get("userCount", 0)
+        logging.info(
+            "Probe %s -> %s : %d users", start_date.date(), end_date.date(), user_count
+        )
+
+        # If zero — nothing to do
+        if user_count == 0:
+            return 0
+
+        # If within API limit, fetch pages and queue
+        if user_count <= 1000:
+            fetched, errored = fetch_and_queue(search_query)
+            if errored:
+                logging.error("Error during fetch_and_queue for %s", search_query)
+            return fetched
+
+        # If too big and the range is > 1 day, split and recurse
+        if (end_date - start_date).days <= 1:
+            # fallback: we can't split further; log and fetch what we can (will still be capped)
+            logging.warning(
+                "Range %s..%s still >1000 results, fetching pages (will be capped at 1000).",
+                start_date.date(),
+                end_date.date(),
             )
+            fetched, _ = fetch_and_queue(search_query)
+            return fetched
 
-            for user in usernames:
-                user_link = user.query_selector("h2[class='h3 lh-condensed'] a")
-                if user_link:
-                    href_value = user_link.get_attribute("href").replace("/", "")
-                    username_list.add(href_value)
-            print(f"Collected {len(username_list)} unique usernames.")
+        mid = start_date + (end_date - start_date) / 2
+        left = fetch_range(start_date, mid)
+        right = fetch_range(mid + timedelta(days=1), end_date)
+        return left + right
 
-            if len(username_list) >= 500:
-                break
+    # determine global range to scan. For full init, scan from 2008-01-01 until today; adjust as needed.
+    today = datetime.now()
+    if init:
+        start = datetime(2008, 1, 1)  # GitHub earliest possible
+    else:
+        # incremental: scan recent 2 weeks
+        start = today - timedelta(weeks=2)
 
-            # Find the refresh button and click it to load new accounts
-            refresh_button = page.query_selector(
-                "a[id='sponsors-featured-accounts-refresh-button']"
-            )
-            if refresh_button:
-                refresh_button.click()
-                # Sleep 2 seconds to buffer next Github Request (Website Limitation)
-                # The page seems to need to buffer about 5 times on 2 second intervals for a next random 25 to be loaded
-                time.sleep(2)
-            else:
-                logging.error("Refresh button not found. Exiting.")
-                break
-        browser.close()
-
-    end = time.time()
-    elapsed = end - start
-    print(f"elaspsed, {elapsed:.2f}")
-    # O(n) and run a query to get the user_id from the username pulled off github to be batch queued to the DB
-
-    print(f"Collected {len(username_list)} unique usernames.")
-    print("length of list: ", len(username_list))
-    github_ids = getGithubIDs(list(username_list))
-
-    return github_ids
+    total = fetch_range(start, today)
+    logging.info("Finished sponsorable collection. Total queued: %d", total)
+    return

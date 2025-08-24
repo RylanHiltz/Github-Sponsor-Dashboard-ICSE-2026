@@ -18,38 +18,85 @@ from backend.db.queries.sponsors import (
     syncSponsors,
     syncSponsorships,
 )
-from backend.db.queries.user_activity import getUserActivity, refreshActivityCheck
+from backend.db.queries.user_activity import (
+    getUserActivity,
+    refreshActivityCheck,
+)
 
-# Scraper
-from backend.scraper.utils import get_sponsorships, getNewRoots
+# Ingest/Scraper
+from backend.ingest.utils import get_sponsorships, getSponsorableUsers
+from backend.ingest.init_check import (
+    load_worker_state,
+    update_worker_state,
+)
 
 # Authentication And Database
 import psycopg2
 from backend.utils.db_conn import db_connection
-from backend.scraper.use_auth import get_auth, is_auth_expiring_soon
+from backend.ingest.use_auth import get_auth, is_auth_expiring_soon
 
 # Logging Imports
 import time
+import datetime
+from datetime import datetime as date
 import logging
 from backend.logs.logger_config import init_logger, log_header
 
 MAX_DEPTH = 6
 
 
-class ScraperWorker:
+class IngestWorker:
     def run(self):
+        """
+        Main worker program to ingest, scrape and and insert data from Github API to database.
 
+        Function Flow
+        -----
+        - Establish neccessary connections to database and logger
+            If this is the first time running, IngestWorker will create a `worker_state.json` in the ingest directory.
+            - This file keeps track of if the worker has been run before, and the last time (ISO 8601) it was run.
+
+        """
+
+        # Establish database connection & logger
         init_logger()
-
-        # Establish database connection
-        conn = db_connection()
+        self.conn = db_connection()
         log_header("Worker has Started")
 
         # Start rescraping timer
         last_stale_check = time.time()
 
         while True:
+            # Load the worker state
             start = time.time()
+            state = load_worker_state()
+            init_run, last_init_run = state.get("init_run"), state.get("last_init_run")
+            elapsed: datetime
+
+            # Parse last_init_run which is stored as an ISO 8601 string (e.g. 2025-08-24T18:21:35.226820)
+            if last_init_run:
+                try:
+                    last_init_run = date.fromisoformat(last_init_run)
+                except Exception:
+                    # Fallback for strict parsing with microseconds
+                    last_init_run = date.strptime(last_init_run, "%Y-%m-%dT%H:%M:%S.%f")
+                # Total time sice the last run
+                elapsed = date.now() - last_init_run
+            else:
+                elapsed = None
+
+            # Else if time since is none or older than 1 year, treat this as an initial run
+            if last_init_run is None or (
+                date.now() - last_init_run
+            ) > datetime.timedelta(days=365):
+                getSponsorableUsers(self.conn, True)
+            # If time since last_init_run is older than 2 weeks, incremental collection
+            elif elapsed > datetime.timedelta(weeks=2):
+                getSponsorableUsers(self.conn, init_run)
+
+            # Only reset the state if the worker completed an initial run prior
+            if init_run == True:
+                update_worker_state()
 
             check_auth = is_auth_expiring_soon()
             # If auth is close to expiration
@@ -59,27 +106,25 @@ class ScraperWorker:
             # Check last_stale_check every 4 hours
             if time.time() - last_stale_check >= 14400:
                 # Re-scrape users every 2 weeks
-                enqueueStaleUsers(conn, days_old=14)
+                enqueueStaleUsers(db=self.conn, days_old=14)
                 last_stale_check = time.time()
                 # Re-establish DB connection every 4 hours
-                conn.close()
-                conn = db_connection()
+                self.conn.close()
+                self.conn = db_connection()
                 logging.info(
                     "4 Hours Elapsed: Re-establishing Fresh Database Connection."
                 )
-
             try:
                 #  Fetch first user from queue
-                data = getFirstInQueue(db=conn)
+                data = getFirstInQueue(db=self.conn)
 
                 # If all pending users have been scraped
                 if not data:
-                    has_skipped = checkStatus("skipped", conn)
+                    has_skipped = checkStatus("skipped", self.conn)
                     if has_skipped:
-                        batchRequeue(db=conn)
+                        batchRequeue(db=self.conn)
                     else:
-                        new_roots = getNewRoots()
-                        batchAddQueue(new_roots, 1, conn)
+                        getSponsorableUsers(self.conn, init_run)
                     continue
 
                 github_id = data["github_id"]
@@ -90,7 +135,7 @@ class ScraperWorker:
 
                 # If the users depth exceeds MAX_DEPTH to crawl, skip the user and continue to next in queue
                 if depth > MAX_DEPTH:
-                    updateStatus(github_id, "skipped", conn)
+                    updateStatus(github_id, "skipped", self.conn)
                     logging.info(
                         f"Skipped user: Github ID {github_id}, Max Depth Reached."
                     )
@@ -98,7 +143,7 @@ class ScraperWorker:
 
                 # Check if the user exists and if the user is enriched with REST API data
                 user_exists, is_enriched, user_id, identity_data = findUser(
-                    github_id=github_id, db=conn
+                    github_id=github_id, db=self.conn
                 )
                 print(user_exists, is_enriched, user_id, identity_data)
 
@@ -106,7 +151,7 @@ class ScraperWorker:
                     # User exists in DB from previous sponsor relation
                     if user_exists and is_enriched == False:
                         # Enrich user metadata from Github API / gender inference
-                        user = enrichUser(github_id, db=conn)
+                        user = enrichUser(github_id, db=self.conn)
                         logging.info(
                             f"Processing User: Github ID {github_id} at depth: {depth}"
                         )
@@ -114,7 +159,7 @@ class ScraperWorker:
                     elif user_exists and is_enriched == True:
                         user = enrichUser(
                             github_id,
-                            db=conn,
+                            db=self.conn,
                             enriched=is_enriched,
                             identity=identity_data,
                         )
@@ -123,7 +168,7 @@ class ScraperWorker:
                         )
                     # User does not exist in DB, create new user
                     elif not user_exists:
-                        user, user_id = createUser(github_id, db=conn)
+                        user, user_id = createUser(github_id, db=self.conn)
                         logging.info(
                             f"Creating User: Github ID {github_id} at depth: {depth}"
                         )
@@ -145,12 +190,12 @@ class ScraperWorker:
                 print(unique_users)
 
                 # Batch create unique users who are not present in the table
-                batchAddQueue(unique_users, depth=(depth + 1), db=conn)
-                batchCreateUser(unique_users, db=conn)
+                batchAddQueue(unique_users, depth=(depth + 1), db=self.conn)
+                batchCreateUser(unique_users, db=self.conn)
 
                 # Add users and organizations to the users table & queue (name and is_enriched defaults to FALSE)
-                syncSponsors(user_id, sponsors, conn)
-                syncSponsorships(user_id, sponsoring, conn)
+                syncSponsors(user_id, sponsors, self.conn)
+                syncSponsorships(user_id, sponsoring, self.conn)
 
                 # Collect the user activity from the Github API ONLY if the specified user HAS a sponsor or is sponsoring
                 # Users without either dont need their user activity collected as they will not be shown in the dataset.
@@ -158,21 +203,23 @@ class ScraperWorker:
                     print(f"\nCollecting User Activity Data For: '{user.username}'")
                     # Checks if the user activity does not exist or is over 365 days old,
                     # otherwise skip this function due to it being quite resource intensive
-                    refresh_activity = refreshActivityCheck(user_id, conn)
+                    refresh_activity = refreshActivityCheck(user_id, self.conn)
                     if refresh_activity:
                         getUserActivity(
                             github_id=github_id,
                             user_id=user_id,
                             user_type=user.type,
                             created_at=user.github_created_at,
-                            db=conn,
+                            db=self.conn,
                         )
 
                 # Update staus of the crawled user
-                updateStatus(github_id=github_id, status="completed", db=conn)
+                updateStatus(github_id=github_id, status="completed", db=self.conn)
 
                 # Set last_scraped to the current time
-                finalizeUserScrape(github_id, private_count, min_sponsor_tier, conn)
+                finalizeUserScrape(
+                    github_id, private_count, min_sponsor_tier, db=self.conn
+                )
 
                 # Print the elapsed time taken to crawl the current user
                 end = time.time()
@@ -185,7 +232,7 @@ class ScraperWorker:
             # Handle operational error thrown by DB
             except psycopg2.OperationalError as e:
                 logging.warning(f"DB connection lost: {e}. Reconnecting...")
-                conn = db_connection()
+                self.conn = db_connection()
                 continue
             # If another error occurs, log the error and stop the scraper
             except Exception as e:
@@ -195,5 +242,5 @@ class ScraperWorker:
 
 
 if __name__ == "__main__":
-    worker = ScraperWorker()
+    worker = IngestWorker()
     worker.run()
