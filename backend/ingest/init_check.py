@@ -29,6 +29,3 @@ def update_worker_state():
     """Update function used after the initial sponsorable users have been crawled"""
     state = {"init_run": False, "last_init_run": datetime.datetime.now().isoformat()}
     save_worker_state(state)
-
-
-update_worker_state()

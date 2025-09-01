@@ -156,7 +156,7 @@ def enrichUser(github_id: int, db, enriched=False, identity=None):
                 last_scraped = %s,
                 is_enriched = %s,
                 github_created_at = %s
-            WHERE username = %s
+            WHERE github_id = %s
             """,
             (
                 user.github_id,
@@ -179,11 +179,10 @@ def enrichUser(github_id: int, db, enriched=False, identity=None):
                 user.last_scraped,
                 user.is_enriched,
                 user.github_created_at,
-                user.username,
+                user.github_id,
             ),
         )
         db.commit()
-        cur.close()
         logging.info(f"Enriched user")
     # Returns the type of the user after getting metadata for scraping
     return user
