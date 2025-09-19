@@ -125,18 +125,30 @@ def createUser(github_id: int, db):
 # User already exists from previous sponsorship relation, run Github API request, collect and update user data
 def enrichUser(github_id: int, db, enriched=False, identity=None):
 
-    if not enriched:
-        user = getUserData(github_id=github_id, db=db)
-    else:
-        user = getUserData(
-            github_id=github_id, db=db, is_enriched=enriched, identity=identity
-        )
+    try:
+        if not enriched:
+            user = getUserData(github_id=github_id, db=db)
+        else:
+            user = getUserData(
+                github_id=github_id, db=db, is_enriched=enriched, identity=identity
+            )
+    except ValueError as ve:
+        logging.info(f"User {github_id} not found or removed: {ve}")
+        raise  # re-raise so caller (worker) can handle it
+    except Exception:
+        logging.exception(f"Error fetching user data for {github_id}")
+        return None
+
+    if user is None:
+        logging.info(f"No user data returned for {github_id}, skipping enrichment")
+        return None
 
     with db.cursor() as cur:
         cur.execute(
             """
             UPDATE users SET
                 github_id = %s,
+                username = %s,
                 name = %s,
                 type = %s,
                 has_pronouns = %s,
@@ -160,6 +172,7 @@ def enrichUser(github_id: int, db, enriched=False, identity=None):
             """,
             (
                 user.github_id,
+                user.username,
                 user.name,
                 user.type,
                 user.has_pronouns,
@@ -208,9 +221,11 @@ def batchCreateUser(github_ids, db):
 
 
 def getUserData(github_id: int, db, is_enriched=False, identity=None):
-    # Call Github GraphQL API to get the user metadata
     try:
         data = getGithubData(github_id=github_id, db=db)
+        if not data:
+            return None
+
         user = UserModel.from_api(data)
 
         if user.location is not None:
@@ -218,38 +233,56 @@ def getUserData(github_id: int, db, is_enriched=False, identity=None):
 
         # If user type is User
         if user.type == "User":
+            # safe identity access (identity expected to be dict or None)
+            prev_has_pronouns = False
+            prev_gender = None
+            if isinstance(identity, dict):
+                prev_has_pronouns = bool(identity.get("pronouns", False))
+                prev_gender = identity.get("gender", None)
+
+            # scrape once
+            has_pronouns, gender_data = scrapePronouns(user.username)
+            user.has_pronouns = bool(has_pronouns)
+
             if not is_enriched:
-                user.has_pronouns, user.gender = scrapePronouns(user.username)
-                # If user does not have pronouns, infer gender based on name and country
-                if not user.has_pronouns:
+                # initial enrichment: prefer explicit pronouns, else infer
+                if user.has_pronouns:
+                    user.gender = gender_data
+                else:
                     user.gender = getGender(user.name, user.location)
                 user.is_enriched = True
                 return user
-            if is_enriched:
-                # Data that should not be reset when refreshing data
-                user.gender = identity["gender"]
-                user.has_pronouns = identity["has_pronouns"]
-                user.is_enriched = is_enriched
-                return user
-        # Else user type is Organization
-        else:
+
+            # refresh/enriched path: preserve previous values when no new pronouns
+            if not user.has_pronouns:
+                user.gender = prev_gender
+                user.has_pronouns = prev_has_pronouns
+            else:
+                user.gender = gender_data
+
             user.is_enriched = True
             return user
 
-    # User in DB does not match user in Github (this means the user has changed their username) remove the user & cascade
+        # Organization
+        user.is_enriched = True
+        return user
+
     except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 404:
+        if getattr(e, "response", None) is not None and e.response.status_code == 404:
             logging.error(
-                f" has changed usernames or no longer exists on github, Nuke user from DB."
+                f"GitHub user {github_id} not found (404). Removing from queue/db."
             )
-            # deleteUser(username, db)
-            # deleteFromQueue(username, db)
-            raise ValueError(f"User not found on GitHub.")
-        else:
-            logging.error(
-                f"Failed to fetch GitHub profile for: {e.response.status_code} {e.response.text}"
-            )
-            return None
+            raise ValueError("User not found on GitHub.")
+        logging.error(
+            f"Failed to fetch GitHub profile for {github_id}: "
+            f"{getattr(e, 'response', '')}"
+        )
+        return None
+    except Exception as e:
+        logging.error(
+            f"Unexpected error in getUserData for {github_id}: {e}", exc_info=True
+        )
+        return None
 
 
 # Use GraphQL to query for users data based off their github ID
@@ -259,13 +292,15 @@ def getGithubData(github_id: int, db):
         response = getRequest(url=rest_url)
         response.raise_for_status()
         return response.json()
+
+    # If user data does not exist in Github API, nuke from sponsorship database
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:
             logging.error(
                 f" has changed usernames or no longer exists on github, Nuke user from DB."
             )
-            deleteUser(github_id, db)
             deleteFromQueue(github_id, db)
+            deleteUser(github_id, db)
             raise ValueError(f"User not found on GitHub.")
         else:
             logging.error(
@@ -436,20 +471,31 @@ def getGender(name, country):
 
 # Runs a check if the user exists in the database an has already been visisted once
 def findUser(github_id: int, db):
+    """
+    Returns a dictionary object of specific data required for the data enrichment of users.
+    - Will output different data depending on the enriched state of the user in queue
+    """
+
+    identity: dict = {
+        "user_id": None,
+        "user_exists": False,
+        "is_enriched": False,
+        "gender": None,
+        "pronouns": None,
+    }
+
     with db.cursor() as cur:
         cur.execute(
             "SELECT id, is_enriched FROM users WHERE github_id = %s LIMIT 1;",
             (github_id,),
         )
-        row = cur.fetchone()
-        print(row)
-        if row:
-            user_id = row[0]
-            enriched = row[1]
+        r1 = cur.fetchone()
+        if r1:
+            identity["user_id"] = r1[0]
+            identity["is_enriched"] = bool(r1[1])
+            identity["user_exists"] = True
 
-            if enriched:
-                # User has been enriched, fetch gender data
-                # - Makes sure not to infer gender more than once
+            if identity["is_enriched"]:
                 cur.execute(
                     """
                     SELECT
@@ -459,15 +505,11 @@ def findUser(github_id: int, db):
                     """,
                     (github_id,),
                 )
-                row = cur.fetchone()
-                gender = row[0]
-                pronouns = row[1]
-                cur.close()
-                return True, True, user_id, {"gender": gender, "has_pronouns": pronouns}
-            else:
-                return True, False, user_id, None
-        else:
-            return False, False, None, None
+                r2 = cur.fetchone()
+                if r2:
+                    identity["gender"] = r2[0]
+                    identity["pronouns"] = r2[1]
+    return identity
 
 
 # Returns an array of user id's mapped to the specific usernames
@@ -481,7 +523,7 @@ def batchGetUserId(github_ids: list[int], db):
         cur.execute(query, (github_ids,))
         rows = cur.fetchall()
         # Convert to a dict or list as needed
-        return [id for id, github_id in rows]
+        return [user_id for user_id, _ in rows]
     return
 
 
