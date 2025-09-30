@@ -18,3 +18,5 @@ scraper.log.*
 # This file keeps track of the init. of the worker
 # Will be created upon runtime if it doesnt exist
 worker_state.json
+
+/local_files

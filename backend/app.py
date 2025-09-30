@@ -5,7 +5,7 @@ from backend.api.queue import queue_bp
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:5173"])
+CORS(app)
 app.register_blueprint(users_bp)
 app.register_blueprint(stats_bp)
 app.register_blueprint(queue_bp)

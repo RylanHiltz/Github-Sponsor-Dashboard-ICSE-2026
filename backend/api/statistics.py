@@ -16,69 +16,55 @@ def get_stats():
 
         cur.execute(
             """
-            WITH sponsorship_counts AS (
-                SELECT 
-                    u.id AS user_id,
-                    COALESCE(COUNT(DISTINCT s1.sponsor_id), 0) + 
-                    COALESCE(u.private_sponsor_count, 0) AS total_sponsors,
-                    COALESCE((
-                        SELECT COUNT(DISTINCT s2.sponsored_id)
-                        FROM sponsorship s2
-                        WHERE s2.sponsor_id = u.id
-                    ), 0) AS total_sponsoring
-                FROM users u
-                LEFT JOIN sponsorship s1 ON s1.sponsored_id = u.id
-                GROUP BY u.id, u.private_sponsor_count
-            ),
-            total_users_cte AS (
-                SELECT COUNT(u.id) AS total_users
-                FROM users u
-                JOIN sponsorship_counts sc ON u.id = sc.user_id
-                WHERE u.is_enriched IS TRUE 
-                AND (sc.total_sponsors > 0 OR sc.total_sponsoring > 0)
-            ),
-            total_sponsorships_cte AS (
-            SELECT COUNT(id) as total_sponsorships FROM sponsorship
-            ),
-            sponsoring_counts AS (
-                SELECT
-                    sponsor_id,
-                    COUNT(sponsored_id) AS total_sponsoring
-                FROM sponsorship
-                GROUP BY sponsor_id
-            ),
-            top_sponsoring_cte AS (
-                SELECT
-                    u.username,
-                    u.avatar_url,
-                    sc.total_sponsoring
-                FROM sponsoring_counts sc
-                JOIN users u ON u.id = sc.sponsor_id
-                ORDER BY sc.total_sponsoring DESC
-                LIMIT 1
-            ),
-            sponsored_counts AS (
-                SELECT
-                    sponsored_id,
-                    COUNT(sponsor_id) AS public_sponsors
-                FROM sponsorship
-                GROUP BY sponsored_id
-            ),
-            top_sponsored_cte AS (
-                SELECT
-                    u.username,
-                    u.avatar_url,
-                    COALESCE(sc.public_sponsors, 0) + COALESCE(u.private_sponsor_count, 0) AS total_sponsors
-                FROM users u
-                LEFT JOIN sponsored_counts sc ON u.id = sc.sponsored_id
-                ORDER BY total_sponsors DESC
-                LIMIT 1
-            )
-            SELECT
-                (SELECT total_users FROM total_users_cte) as total_users,
-                (SELECT total_sponsorships FROM total_sponsorships_cte) as total_sponsorships,
-                (SELECT row_to_json(top_sponsoring_cte) FROM top_sponsoring_cte) as top_sponsoring,
-                (SELECT row_to_json(top_sponsored_cte) FROM top_sponsored_cte) as top_sponsored;
+           WITH sponsored_counts AS (
+    SELECT sponsored_id AS user_id, COUNT(DISTINCT sponsor_id) AS public_sponsors
+    FROM sponsorship
+    GROUP BY sponsored_id
+),
+sponsoring_counts AS (
+    SELECT sponsor_id AS user_id, COUNT(DISTINCT sponsored_id) AS total_sponsoring
+    FROM sponsorship
+    GROUP BY sponsor_id
+),
+sponsorship_counts AS (
+    SELECT 
+        u.id AS user_id,
+        COALESCE(sc.public_sponsors, 0) + COALESCE(u.private_sponsor_count, 0) AS total_sponsors,
+        COALESCE(gc.total_sponsoring, 0) AS total_sponsoring
+    FROM users u
+    LEFT JOIN sponsored_counts sc ON u.id = sc.user_id
+    LEFT JOIN sponsoring_counts gc ON u.id = gc.user_id
+),
+total_users_cte AS (
+    SELECT COUNT(DISTINCT u.id) AS total_users
+    FROM users u
+    JOIN sponsorship_counts sc ON u.id = sc.user_id
+    WHERE u.is_enriched IS TRUE
+      AND (sc.total_sponsors > 0 OR sc.total_sponsoring > 0)
+),
+total_sponsorships_cte AS (
+    SELECT COUNT(*) as total_sponsorships
+    FROM sponsorship
+),
+top_sponsoring_cte AS (
+    SELECT u.username, u.avatar_url, sc.total_sponsoring
+    FROM sponsorship_counts sc
+    JOIN users u ON u.id = sc.user_id
+    ORDER BY sc.total_sponsoring DESC
+    LIMIT 1
+),
+top_sponsored_cte AS (
+    SELECT u.username, u.avatar_url, sc.total_sponsors
+    FROM sponsorship_counts sc
+    JOIN users u ON u.id = sc.user_id
+    ORDER BY sc.total_sponsors DESC
+    LIMIT 1
+)
+SELECT
+    (SELECT total_users FROM total_users_cte) AS total_users,
+    (SELECT total_sponsorships FROM total_sponsorships_cte) AS total_sponsorships,
+    (SELECT row_to_json(top_sponsoring_cte) FROM top_sponsoring_cte) AS top_sponsoring,
+    (SELECT row_to_json(top_sponsored_cte) FROM top_sponsored_cte) AS top_sponsored;
             """
         )
         stats = cur.fetchone()
@@ -231,68 +217,75 @@ def get_user_brief_stats():
 
         cur.execute(
             """
-            WITH user_type_users AS (
-            SELECT id, username, avatar_url, location, private_sponsor_count
-            FROM users
-            WHERE type = 'User'
-            ),
-            sponsorship_counts AS (
-            SELECT 
-            u.id AS user_id,
-            COALESCE(COUNT(DISTINCT s1.sponsor_id), 0) + COALESCE(u.private_sponsor_count, 0) AS total_sponsors,
-            COALESCE((
-            SELECT COUNT(DISTINCT s2.sponsored_id)
-            FROM sponsorship s2
-            WHERE s2.sponsor_id = u.id
-            ), 0) AS total_sponsoring
-            FROM user_type_users u
-            LEFT JOIN sponsorship s1 ON s1.sponsored_id = u.id
-            GROUP BY u.id, u.private_sponsor_count
-            ),
-            top_sponsored AS (
-            SELECT 
-            u.username,
-            u.avatar_url,
-            COALESCE(sc.total_sponsors, 0) AS total_sponsors
-            FROM user_type_users u
-            JOIN sponsorship_counts sc ON u.id = sc.user_id
-            ORDER BY sc.total_sponsors DESC
-            LIMIT 1
-            ),
-            top_sponsoring AS (
-            SELECT 
-            u.username,
-            u.avatar_url,
-            COALESCE(sc.total_sponsoring, 0) AS total_sponsoring
-            FROM user_type_users u
-            JOIN sponsorship_counts sc ON u.id = sc.user_id
-            ORDER BY sc.total_sponsoring DESC
-            LIMIT 1
-            ),
-            country_sponsored_counts AS (
-            -- Include users who have public sponsors OR only private sponsors
-            SELECT 
-            u.location AS country,
-            COUNT(DISTINCT u.id) AS sponsored_users
-            FROM user_type_users u
-            WHERE u.location IS NOT NULL
-              AND (
-            u.private_sponsor_count > 0
-            OR EXISTS (SELECT 1 FROM sponsorship s WHERE s.sponsored_id = u.id)
-              )
-            GROUP BY u.location
-            ),
-            top_country AS (
-            SELECT country, sponsored_users
-            FROM country_sponsored_counts
-            ORDER BY sponsored_users DESC
-            LIMIT 1
-            )
-            SELECT
-            (SELECT COUNT(*) FROM user_type_users) AS total_users,
-            (SELECT row_to_json(top_sponsored) FROM top_sponsored) AS most_sponsored_user,
-            (SELECT row_to_json(top_sponsoring) FROM top_sponsoring) AS most_sponsoring_user,
-            (SELECT row_to_json(top_country) FROM top_country) AS top_country;
+WITH user_type_users AS (
+    SELECT id, username, avatar_url, location, private_sponsor_count
+    FROM users
+    WHERE type = 'User'
+),
+sponsored_counts AS (
+    SELECT sponsored_id AS user_id, COUNT(DISTINCT sponsor_id) AS public_sponsors
+    FROM sponsorship
+    GROUP BY sponsored_id
+),
+sponsoring_counts AS (
+    SELECT sponsor_id AS user_id, COUNT(DISTINCT sponsored_id) AS total_sponsoring
+    FROM sponsorship
+    GROUP BY sponsor_id
+),
+sponsorship_counts AS (
+    SELECT 
+        u.id AS user_id,
+        COALESCE(sc.public_sponsors, 0) + COALESCE(u.private_sponsor_count, 0) AS total_sponsors,
+        COALESCE(gc.total_sponsoring, 0) AS total_sponsoring
+    FROM user_type_users u
+    LEFT JOIN sponsored_counts sc ON u.id = sc.user_id
+    LEFT JOIN sponsoring_counts gc ON u.id = gc.user_id
+),
+top_sponsored AS (
+    SELECT 
+        u.username,
+        u.avatar_url,
+        sc.total_sponsors
+    FROM user_type_users u
+    JOIN sponsorship_counts sc ON u.id = sc.user_id
+    ORDER BY sc.total_sponsors DESC
+    LIMIT 1
+),
+top_sponsoring AS (
+    SELECT 
+        u.username,
+        u.avatar_url,
+        sc.total_sponsoring
+    FROM user_type_users u
+    JOIN sponsorship_counts sc ON u.id = sc.user_id
+    ORDER BY sc.total_sponsoring DESC
+    LIMIT 1
+),
+country_sponsored_counts AS (
+    -- Include users who have public sponsors OR only private sponsors
+    SELECT 
+        u.location AS country,
+        COUNT(DISTINCT u.id) AS sponsored_users
+    FROM user_type_users u
+    JOIN sponsorship_counts sc ON u.id = sc.user_id
+    WHERE u.location IS NOT NULL
+      AND sc.total_sponsors > 0
+    GROUP BY u.location
+),
+top_country AS (
+    SELECT country, sponsored_users
+    FROM country_sponsored_counts
+    ORDER BY sponsored_users DESC
+    LIMIT 1
+)
+SELECT
+    (SELECT COUNT(DISTINCT u.id) 
+     FROM user_type_users u
+     JOIN sponsorship_counts sc ON u.id = sc.user_id
+     WHERE sc.total_sponsors > 0 OR sc.total_sponsoring > 0) AS total_users,
+    (SELECT row_to_json(top_sponsored) FROM top_sponsored) AS most_sponsored_user,
+    (SELECT row_to_json(top_sponsoring) FROM top_sponsoring) AS most_sponsoring_user,
+    (SELECT row_to_json(top_country) FROM top_country) AS top_country;
             """
         )
         results = cur.fetchall()

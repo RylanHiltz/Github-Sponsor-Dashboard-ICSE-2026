@@ -44,63 +44,63 @@ def get_users():
             "estimated_earnings": "estimated_earnings",
         }
 
+        # Whitelist filter keys (defensive)
+        allowed_filters = {"gender", "type", "location"}
+
         where_clauses = []
         order_clause = []
         params = []
 
-        # Handle search query
+        # Handle search query (parameterized)
         if search_query:
-            # Combine name and username into a searchable vector
-            # Use plainto_tsquery for user input to handle multiple words safely
             where_clauses.append(
                 "to_tsvector('english', u.username || ' ' || u.name) @@ plainto_tsquery('english', %s)"
             )
             params.append(search_query)
 
-        # Handle filters
+        # Handle filters (build explicit placeholders for IN-lists)
         for key, values in filters.items():
-            if values:
-                if "None" in values:
-                    values.remove("None")
-                    if values:
-                        where_clauses.append(f"(u.{key} IN %s OR u.{key} IS NULL)")
-                        params.append(tuple(values))
-                    else:
-                        where_clauses.append(f"u.{key} IS NULL")
-                else:
+            if key not in allowed_filters:
+                continue  # ignore unexpected filter keys
+            if not values:
+                continue
+            # treat string "None" as a request for NULL values
+            if "None" in values:
+                values = [v for v in values if v != "None"]
+                if values:
                     placeholders = ",".join(["%s"] * len(values))
-                    where_clauses.append(f"u.{key} IN ({placeholders})")
+                    where_clauses.append(
+                        f"(u.{key} IN ({placeholders}) OR u.{key} IS NULL)"
+                    )
                     params.extend(values)
+                else:
+                    where_clauses.append(f"u.{key} IS NULL")
+            else:
+                placeholders = ",".join(["%s"] * len(values))
+                where_clauses.append(f"u.{key} IN ({placeholders})")
+                params.extend(values)
 
-        # Append is_enriched at the end to only query for users who have full profiles
+        # Always require enriched users with sponsor activity
         where_clauses.append("u.is_enriched IS TRUE")
         where_clauses.append("(sc.total_sponsors > 0 OR sc.total_sponsoring > 0)")
         where_clause = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
-        # Handle column sorters
+        # Build ORDER BY using only whitelisted mapping (safe to inject column names from mapping)
         order_by_parts = []
         for i, field in enumerate(sort_fields):
             if field in sortable_fields:
                 col_name = sortable_fields[field]
-                order = "ASC" if sort_orders[i] == "ascend" else "DESC"
+                order = (
+                    "ASC"
+                    if (i < len(sort_orders) and sort_orders[i] == "ascend")
+                    else "DESC"
+                )
                 order_by_parts.append(f"{col_name} {order}")
 
-        # TODO: attempt to see if this can be better done for filtering while doing search
-        # Create the order clause to pass into the data query
-        if order_by_parts:
-            if search_query:
-                # Prioritize matches for username or name when a search query is active
-                priority_order = f"""
-                CASE
-                    WHEN u.username ILIKE '{search_query}' THEN 1
-                    WHEN u.name ILIKE '{search_query}' THEN 2
-                    WHEN u.username ILIKE '{search_query}%' THEN 3
-                    WHEN u.name ILIKE '{search_query}%' THEN 4
-                    ELSE 5
-                END
-                """
-                order_by_parts.insert(0, priority_order)
-            order_clause = {f"ORDER BY {', '.join(order_by_parts)}"}
+        if search_query:
+            search_rank_expression = "ts_rank_cd(to_tsvector('english', u.username || ' ' || u.name), plainto_tsquery('english', %s))"
+            order_by_parts.insert(0, f"{search_rank_expression} DESC")
+            params.append(search_query)
 
         order_clause = (
             f"ORDER BY {', '.join(order_by_parts)}"
@@ -152,9 +152,9 @@ def get_users():
             ) * sc.total_sponsors
             ) AS estimated_earnings,
             COUNT(*) OVER() AS total_count
-        FROM users u
-        JOIN sponsorship_counts sc ON sc.user_id = u.id
-        CROSS JOIN median_cost mc
+            FROM users u
+            JOIN sponsorship_counts sc ON sc.user_id = u.id
+            CROSS JOIN median_cost mc
             {where_clause}
             {order_clause}
         LIMIT %s OFFSET %s;
