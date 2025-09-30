@@ -27,14 +27,14 @@ GITHUB_TOKEN = os.getenv("PAT")
 
 
 # Batch add an array of usernames to the queue for scraping
-def batchAddQueue(github_ids, depth, db):
+def batchAddQueue(github_ids, priority, db):
 
-    entries = [(github_id, depth, "pending") for github_id in github_ids]
+    entries = [(github_id, priority, "pending") for github_id in github_ids]
 
     with db.cursor() as cur:
         cur.executemany(
             """
-            INSERT INTO queue (github_id, depth, status)
+            INSERT INTO queue (github_id, priority, status)
             VALUES (%s, %s, %s)
             ON CONFLICT (github_id) DO NOTHING;
             """,
@@ -50,13 +50,12 @@ def batchRequeue(db):
         cur.execute(
             """
             UPDATE queue SET
-            depth = 1, 
             status = 'pending'
-            WHERE status = 'skipped';
+            WHERE status = 'completed';
             """
         )
     db.commit()
-    print("Batch requeued all edge case users at maximum depth as new roots")
+    print("Batch requeued all users")
     return
 
 
@@ -83,9 +82,9 @@ def getFirstInQueue(db):
     cur = db.cursor()
     cur.execute(
         """
-        SELECT github_id, depth FROM queue
+        SELECT github_id, priority FROM queue
         WHERE status = 'pending'
-        ORDER BY depth ASC
+        ORDER BY priority ASC
         LIMIT 1;
         """
     )
@@ -93,21 +92,32 @@ def getFirstInQueue(db):
     cur.close()
     if result:
         # Map tuple to dict
-        return {"github_id": result[0], "depth": result[1]}
+        return {"github_id": result[0], "priority": result[1]}
     return None
 
 
 # Update the status of the passed in user in the DB
-def updateStatus(github_id: int, status, db):
+def updateStatus(github_id: int, status, db, priority=None):
     with db.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE queue SET
-                status = %s
-            WHERE github_id = %s
-            """,
-            (status, github_id),
-        )
+        if priority is not None:
+            cur.execute(
+                """
+                UPDATE queue SET
+                    status = %s,
+                    priority = %s
+                WHERE github_id = %s
+                """,
+                (status, priority, github_id),
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE queue SET
+                    status = %s
+                WHERE github_id = %s
+                """,
+                (status, github_id),
+            )
         db.commit()
         print(f"Updated user status\n")
         return
@@ -161,7 +171,7 @@ def addToQueue(username, db):
 
     github_id = user_data["databaseId"]
 
-    # Add user to queue with depth 1 (user is a new root)
+    # Add user to queue with priority 5 (average priority case)
     with db.cursor() as cur:
         # Check if github_id already exists in the queue
         cur.execute(
@@ -176,11 +186,11 @@ def addToQueue(username, db):
         # Insert user into queue
         cur.execute(
             """
-            INSERT INTO queue (github_id, depth, status)
+            INSERT INTO queue (github_id, priority, status)
             VALUES (%s, %s, %s)
             ON CONFLICT (github_id) DO NOTHING;
             """,
-            (github_id, 1, "pending"),
+            (github_id, 5, "pending"),
         )
         db.commit()
         return {"success": True}, 200

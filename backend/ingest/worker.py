@@ -5,7 +5,7 @@ from backend.db.queries.queue import (
     batchRequeue,
     updateStatus,
     enqueueStaleUsers,
-    checkStatus,
+    # checkStatus,
 )
 from backend.db.queries.users import (
     createUser,
@@ -42,7 +42,7 @@ from datetime import datetime as date
 import logging
 from backend.logs.logger_config import init_logger, log_header
 
-MAX_DEPTH = 6
+MAX_PRIORITY = 10
 
 
 class IngestWorker:
@@ -52,10 +52,22 @@ class IngestWorker:
 
         Function Flow
         -----
-        - Establish neccessary connections to database and logger
-            If this is the first time running, IngestWorker will create a `worker_state.json` in the ingest directory.
-            - This file keeps track of if the worker has been run before, and the last time (ISO 8601) it was run.
-
+        - Establish neccessary connections to database and logger.
+        - On first run, create `worker_state.json` to track initialization status and last run time.
+        - Enter main `while True` loop:
+            1.  **State & Seeding**: Load worker state. If it's the first run or has been a long time, seed the queue by fetching all "Sponsorable" users from GitHub.
+            2.  **Authentication**: Check if the GitHub auth token is expiring and refresh it if needed.
+            3.  **Periodic Tasks**: Every 4 hours, re-establish the database connection and enqueue any "stale" users (not scraped in 7 days) for reprocessing.
+            4.  **Fetch from Queue**: Get the highest-priority user from the queue. If the queue is empty, attempt to re-seed.
+            5.  **Enrich/Create User**: Check the user's status in the database. If they don't exist, create them. If they exist but lack full details, enrich them using GitHub's REST API.
+            6.  **Crawl Sponsorships**: Fetch the user's sponsors and the users they are sponsoring via the GraphQL API.
+            7.  **Adjust Priority & Enqueue New Users**:
+                - If new, unique users are found in the relationships, increment the current user's priority and add the new users to the queue.
+                - If only existing relationships are found, the priority remains the same.
+                - If no relationships are found, decrement the priority.
+            8.  **Sync Data**: Update the `sponsorship` table with the latest relationships and collect the user's historical activity data if needed.
+            9.  **Finalize**: Update the user's status to 'completed' in the queue and record the `last_scraped` timestamp.
+            10. **Error Handling**: Catch and log database connection errors or other exceptions, with built-in reconnection logic and graceful shutdown.
         """
 
         # Establish database connection & logger
@@ -105,8 +117,8 @@ class IngestWorker:
 
             # Check last_stale_check every 4 hours
             if time.time() - last_stale_check >= 14400:
-                # Re-scrape users every 2 weeks
-                enqueueStaleUsers(db=self.conn, days_old=14)
+                # Re-scrape users every week (if they have not been re-visited)
+                enqueueStaleUsers(db=self.conn, days_old=7)
                 last_stale_check = time.time()
                 # Re-establish DB connection every 4 hours
                 self.conn.close()
@@ -118,34 +130,26 @@ class IngestWorker:
                 #  Fetch first user from queue
                 data = getFirstInQueue(db=self.conn)
 
-                # If all pending users have been scraped
+                # If all pending users have been scraped batch requeue all users
                 if not data:
-                    has_skipped = checkStatus("skipped", self.conn)
-                    if has_skipped:
-                        batchRequeue(db=self.conn)
-                    else:
-                        getSponsorableUsers(self.conn, init_run)
+                    getSponsorableUsers(self.conn, init_run)
+                    batchRequeue(db=self.conn)
                     continue
 
                 github_id = data["github_id"]
-                depth = data["depth"]
+                priority = data["priority"]
 
                 log_header(f"SCRAPING CURRENT USER: Github ID {github_id} ")
-                print(f"\n\nProcessing user: Github ID {github_id} at depth: {depth}")
-
-                # If the users depth exceeds MAX_DEPTH to crawl, skip the user and continue to next in queue
-                if depth > MAX_DEPTH:
-                    updateStatus(github_id, "skipped", self.conn)
-                    logging.info(
-                        f"Skipped user: Github ID {github_id}, Max Depth Reached."
-                    )
-                    continue
+                print(
+                    f"\n\nProcessing user: Github ID {github_id} at priority: {priority}"
+                )
 
                 # Check if the user exists and if the user is enriched with REST API data
-                user_exists, is_enriched, user_id, identity_data = findUser(
-                    github_id=github_id, db=self.conn
-                )
-                print(user_exists, is_enriched, user_id, identity_data)
+                identity = findUser(github_id=github_id, db=self.conn)
+                # Safe unpacking with defaults
+                user_id = identity.get("user_id")
+                user_exists = bool(identity.get("user_exists", False))
+                is_enriched = bool(identity.get("is_enriched", False))
 
                 try:
                     # User exists in DB from previous sponsor relation
@@ -153,7 +157,7 @@ class IngestWorker:
                         # Enrich user metadata from Github API / gender inference
                         user = enrichUser(github_id, db=self.conn)
                         logging.info(
-                            f"Processing User: Github ID {github_id} at depth: {depth}"
+                            f"Processing User: Github ID {github_id} at priority: {priority}"
                         )
                     # User has already been scraped for their data once (prevents unwanted future updates)
                     elif user_exists and is_enriched == True:
@@ -161,21 +165,29 @@ class IngestWorker:
                             github_id,
                             db=self.conn,
                             enriched=is_enriched,
-                            identity=identity_data,
+                            identity=identity,
                         )
                         logging.info(
-                            f"User already enriched: Github ID {github_id} at depth: {depth}, Data has been refreshed."
+                            f"User already enriched: Github ID {github_id} at priority: {priority}, Data has been refreshed."
                         )
                     # User does not exist in DB, create new user
                     elif not user_exists:
                         user, user_id = createUser(github_id, db=self.conn)
                         logging.info(
-                            f"Creating User: Github ID {github_id} at depth: {depth}"
+                            f"Creating User: Github ID {github_id} at priority: {priority}"
                         )
                 except ValueError as e:
                     logging.warning(
                         "User has been deleted. They do not exist on github (sponsors if previously existed have been updated)"
                     )
+                    continue
+
+                # Defensive checks: ensure we actually have a user object and a DB user_id
+                if user is None:
+                    logging.warning(
+                        f"No user data returned for Github ID {github_id}; skipping."
+                    )
+                    updateStatus(github_id=github_id, status="skipped", db=self.conn)
                     continue
 
                 #  Crawl the user for sponsorship relations
@@ -190,17 +202,23 @@ class IngestWorker:
                 print(unique_users)
 
                 # Batch create unique users who are not present in the table
-                batchAddQueue(unique_users, depth=(depth + 1), db=self.conn)
-                batchCreateUser(unique_users, db=self.conn)
+                if unique_users:
+                    # User was discovered with new users, increase priority of user
+                    new_priority = min(int(priority) + 1, MAX_PRIORITY)
 
-                # Add users and organizations to the users table & queue (name and is_enriched defaults to FALSE)
-                syncSponsors(user_id, sponsors, self.conn)
-                syncSponsorships(user_id, sponsoring, self.conn)
+                    # Create placeholder users to conform to foreign key constraint
+                    # Batch add users at a middle standing priority
+                    batchCreateUser(unique_users, db=self.conn)
+                    batchAddQueue(unique_users, priority=5, db=self.conn)
 
-                # Collect the user activity from the Github API ONLY if the specified user HAS a sponsor or is sponsoring
-                # Users without either dont need their user activity collected as they will not be shown in the dataset.
-                if sponsors or sponsoring:
-                    print(f"\nCollecting User Activity Data For: '{user.username}'")
+                    # Add users and organizations to the users table & queue (name and is_enriched defaults to FALSE)
+                    syncSponsors(user_id, sponsors, self.conn)
+                    syncSponsorships(user_id, sponsoring, self.conn)
+
+                    # Collect the user activity from the Github API ONLY if the specified user HAS a sponsor or is sponsoring
+                    # Users without either dont need their user activity collected as they will not be shown in the dataset.
+                    print(f"\nCollecting User Activity Data:")
+
                     # Checks if the user activity does not exist or is over 365 days old,
                     # otherwise skip this function due to it being quite resource intensive
                     refresh_activity = refreshActivityCheck(user_id, self.conn)
@@ -212,9 +230,21 @@ class IngestWorker:
                             created_at=user.github_created_at,
                             db=self.conn,
                         )
+                # If no new users were found, but existing sponsor/sponsoring relationships exist
+                elif sponsors or sponsoring:
+                    new_priority = priority
+                # If no new users are found, and no sponsor relationships exist
+                else:
+                    # Decrement the priority for subsequent searches, with a floor of 1.
+                    new_priority = max(int(priority) - 1, 1)
 
-                # Update staus of the crawled user
-                updateStatus(github_id=github_id, status="completed", db=self.conn)
+                # Update staus and priority of the crawled user
+                updateStatus(
+                    github_id=github_id,
+                    status="completed",
+                    db=self.conn,
+                    priority=new_priority,
+                )
 
                 # Set last_scraped to the current time
                 finalizeUserScrape(

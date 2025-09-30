@@ -240,7 +240,7 @@ def getUserData(github_id: int, db, is_enriched=False, identity=None):
                 prev_has_pronouns = bool(identity.get("pronouns", False))
                 prev_gender = identity.get("gender", None)
 
-            # scrape once
+            # scrape users pronouns
             has_pronouns, gender_data = scrapePronouns(user.username)
             user.has_pronouns = bool(has_pronouns)
 
@@ -253,11 +253,14 @@ def getUserData(github_id: int, db, is_enriched=False, identity=None):
                 user.is_enriched = True
                 return user
 
-            # refresh/enriched path: preserve previous values when no new pronouns
+            # This block handles re-enrichment of an existing user.
+            # If no new pronouns are found on the profile during the scrape:
             if not user.has_pronouns:
+                # Preserve the previously stored gender and pronoun status.
                 user.gender = prev_gender
                 user.has_pronouns = prev_has_pronouns
             else:
+                # If new pronouns are found, update the gender based on them.
                 user.gender = gender_data
 
             user.is_enriched = True
