@@ -111,7 +111,7 @@ const DashboardContent: React.FC = () => {
                         ]}
                     />
                 </Sider>
-                <Content style={{ padding: '0 10px', minHeight: 280 }}>
+                <Content style={{ padding: '0 10px', minHeight: 280, }}>
                     <Outlet />
                 </Content>
             </Layout>

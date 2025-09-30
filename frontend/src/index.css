@@ -13,7 +13,6 @@
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -21,19 +20,37 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Custom scrollbar styles (default to dark) */
 .custom-scrollbar::-webkit-scrollbar {
-  @apply w-[6px] bg-[#292929] p-2 rounded-lg;
+  @apply w-2 h-2; /* 8px width and height */
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: none;
-  margin: 0px;
+/* Light mode scrollbar overrides */
+@media (prefers-color-scheme: light) {
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-[#b4b4b4];
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-[#999999] rounded-lg;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  @apply bg-[#474747] border-[10px] rounded-lg;
+@media (prefers-color-scheme: dark) {
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-[#c9c8c8] rounded-lg;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-[#898686] rounded-lg;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  @apply bg-[#585858];
+.scrollbar-width {
+  width: 300px;
+  height: 100px;
 }

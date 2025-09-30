@@ -7,5 +7,7 @@ export default {
     './src/**/*.{js,ts,jsx,tsx}',
   ],
   theme: theme, // Use the imported theme object
-  plugins: [],
+  plugins: [
+    
+  ],
 }

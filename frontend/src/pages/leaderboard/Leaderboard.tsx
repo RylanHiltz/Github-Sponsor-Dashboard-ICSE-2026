@@ -245,7 +245,8 @@ const Leaderboard: React.FC = () => {
             sorter: {
                 multiple: 2,
             },
-            sortDirections: ["descend", "ascend"]
+            sortDirections: ["descend", "ascend"],
+
         },
         {
             title: "Following",

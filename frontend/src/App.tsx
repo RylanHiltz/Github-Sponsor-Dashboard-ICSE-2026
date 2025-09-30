@@ -29,7 +29,7 @@ const ThemedApp = () => {
           // Primary Color
           colorPrimary: theme === 'dark' ? themeColors.primary.dark : themeColors.primary.light,
 
-          colorBgContainer: theme === 'dark' ? '#141414' : '#fff',
+          colorBgContainer: theme === 'dark' ? '#111' : '#fff',
 
           borderColor: theme === 'dark' ? themeColors.border.dark : themeColors.border.light,
 

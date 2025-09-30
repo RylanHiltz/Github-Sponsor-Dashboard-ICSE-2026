@@ -164,7 +164,7 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
                                 <span className="flex gap-2 text-center items-center">
                                     <h2 style={{ color: token.colorTextSecondary }}>{briefData?.top_country.country}</h2>
                                     <span>·</span>
-                                    <p style={{ color: token.colorTextSecondary }} className="text-[14px] font-medium pt-0.5">{briefData?.top_country.sponsored_users} Users</p>
+                                    <p style={{ color: token.colorTextSecondary }} className="text-[14px] font-semibold pt-0.5">{briefData?.top_country.sponsored_users} Users</p>
                                 </span>
                             </>
                         )}
@@ -259,16 +259,24 @@ const LocationDistributionGraph = () => {
             const response = await fetch(`${apiUrl}/api/user-stats`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
-            const data = await response.json();
+            const raw = await response.json();
+            const users = Array.isArray(raw) ? (raw as userLocations[]) : [];
 
-            const genderData = data as userLocations[] ?? [];
-            console.log("API Response:", genderData);
+            const labels: string[] = [];
+            const maleData: number[] = [];
+            const femaleData: number[] = [];
+            const otherData: number[] = [];
+            const unknownData: number[] = [];
 
-            const labels = genderData.map(c => c.country).filter(Boolean);
-            const maleData = genderData.map(c => c.genderData.male);
-            const femaleData = genderData.map(c => c.genderData.female);
-            const otherData = genderData.map(c => c.genderData.other);
-            const unknownData = genderData.map(c => c.genderData.unknown);
+            for (const u of users) {
+                if (!u?.country) continue;
+                const { male = 0, female = 0, other = 0, unknown = 0 } = u.genderData ?? {};
+                labels.push(u.country);
+                maleData.push(male);
+                femaleData.push(female);
+                otherData.push(other);
+                unknownData.push(unknown);
+            }
 
             const newChartData: ChartData<'bar'> = {
                 labels: labels,
@@ -276,7 +284,9 @@ const LocationDistributionGraph = () => {
                     {
                         label: 'Unknown',
                         data: unknownData,
-                        backgroundColor: 'rgba(156, 163, 175, 0.8)', // Gray
+                        backgroundColor: 'rgba(105, 105, 105, 0.391)', // Gray
+                        borderWidth: 1.5,
+                        borderColor: 'rgba(90, 90, 90, 0.63)',
                         stack: 'Stack 0',
                         barPercentage: 1,
                         categoryPercentage: 0.8,
@@ -285,7 +295,9 @@ const LocationDistributionGraph = () => {
                     {
                         label: 'Other',
                         data: otherData,
-                        backgroundColor: 'rgba(75, 192, 192, 0.8)', // Bright Teal
+                        backgroundColor: 'rgba(73, 178, 178, 0.8)', // Bright Teal
+                        borderWidth: 1.5,
+                        borderColor: 'rgba(0, 151, 151, 1)',
                         stack: 'Stack 0',
                         barPercentage: 1,
                         categoryPercentage: 0.8,
@@ -294,7 +306,9 @@ const LocationDistributionGraph = () => {
                     {
                         label: 'Male',
                         data: maleData,
-                        backgroundColor: 'rgba(54, 162, 235, 0.8)', // Bright Blue
+                        backgroundColor: 'rgba(33, 149, 226, 0.531)', // Bright Blue
+                        borderWidth: 1.5,
+                        borderColor: 'rgba(0, 123, 206, 0.88)',
                         stack: 'Stack 0',
                         barPercentage: 1,
                         categoryPercentage: 0.8,
@@ -303,7 +317,9 @@ const LocationDistributionGraph = () => {
                     {
                         label: 'Female',
                         data: femaleData,
-                        backgroundColor: 'rgba(255, 99, 132, 0.8)', // Bright Pink
+                        backgroundColor: 'rgba(255, 99, 133, 0.599)', // Bright Pink
+                        borderWidth: 1.5,
+                        borderColor: 'rgba(209, 60, 115, 0.88)',
                         stack: 'Stack 0',
                         barPercentage: 1,
                         categoryPercentage: 0.8,

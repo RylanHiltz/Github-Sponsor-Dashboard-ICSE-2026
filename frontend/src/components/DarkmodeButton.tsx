@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { Button, theme as AntdTheme } from 'antd'
 import { MdDarkMode, MdLightMode } from 'react-icons/md'
 

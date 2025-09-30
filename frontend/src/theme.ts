@@ -1,16 +1,22 @@
 
 // File that contains the theme colors for the website, will be passed in as color 
 
+// Main color pallete for repeated colors
+const bluePrimary = '#3779E3'
+const blueSecondary = '#3879E4'
+
+
+
 export const theme = {
   extend: {
     colors: {
       primary: {
-        light: '#3779E3',
-        dark: '#3779E3'
+        light: bluePrimary,
+        dark: bluePrimary
       },
       background: {
         light: '#ffffff',
-        dark: '#141414'
+        dark: '#111111'
       },
       surface: {
         light: '#f0f0f0',
@@ -26,12 +32,12 @@ export const theme = {
           dark: '#e5e7eb'
         },
         secondary: {
-          light: '#6b7280',
-          dark: '#9ca3af'
+          light: '#484848',
+          dark: '#c5c5c5'
         },
         linkHover: {
-          light: '#3879E4',
-          dark: '#3879E4'
+          light: blueSecondary,
+          dark: blueSecondary
         }
       },
       cardBg: {
@@ -41,6 +47,10 @@ export const theme = {
       gridColor: {
         light: '#D1D1D1',
         dark: '#393E46',
+      },
+      tooltipBg: {
+        light: '',
+        dark: '#292c30',
       }
     },
   },
