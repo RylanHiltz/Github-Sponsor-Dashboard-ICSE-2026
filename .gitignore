@@ -2,6 +2,7 @@
 # ignore env file 
 .env
 .DS_Store
+.vscode
 
 # ignore virtual environment 
 venv
