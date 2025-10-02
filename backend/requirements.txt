@@ -6,3 +6,4 @@ requests
 schedule
 flask-cors
 sqlalchemy
+openAi
