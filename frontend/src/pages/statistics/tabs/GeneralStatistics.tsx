@@ -51,7 +51,7 @@ const GeneralStatistics = ({ playSignal }: { playSignal: number }) => {
 
     const getBrief = async () => {
         try {
-            const response = await fetch(`${apiUrl}/api/stats/brief`);
+            const response = await fetch(`${apiUrl}/stats/brief`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json() as BriefStats;
             setBriefData(data);
@@ -208,7 +208,7 @@ const LocationRolesGraph = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const response = await fetch(`${apiUrl}/api/location-sponsorship-roles`);
+                const response = await fetch(`${apiUrl}/location-sponsorship-roles`);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data: LocationRole[] = await response.json();
 
@@ -297,7 +297,7 @@ const SponsorshipRolesByTypeGraph = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const response = await fetch(`${apiUrl}/api/sponsorship-roles-by-type`);
+                const response = await fetch(`${apiUrl}/sponsorship-roles-by-type`);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data: RolesByType[] = await response.json();
 
@@ -405,7 +405,7 @@ const GenderDistributionGraph = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const response = await fetch(`${apiUrl}/api/gender-distribution-table`);
+                const response = await fetch(`${apiUrl}/gender-distribution-table`);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data: GenderDataRow[] = await response.json();
 

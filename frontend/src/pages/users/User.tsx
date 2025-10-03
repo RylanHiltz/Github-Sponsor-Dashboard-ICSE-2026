@@ -96,7 +96,7 @@ const User: React.FC = () => {
     const getUserData = async () => {
 
         try {
-            const response = await fetch(`${apiUrl}/api/user/${id}`)
+            const response = await fetch(`${apiUrl}/user/${id}`)
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const data = await response.json();

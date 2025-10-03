@@ -110,7 +110,7 @@ const Leaderboard: React.FC = () => {
         });
 
         try {
-            const response = await fetch(`${apiUrl}/api/users?${queryParams.toString()}`);
+            const response = await fetch(`${apiUrl}/users?${queryParams.toString()}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const data = await response.json(); // Expects { users: [], total: number }
@@ -139,7 +139,7 @@ const Leaderboard: React.FC = () => {
 
     async function getLocations() {
         try {
-            const response = await fetch(`${apiUrl}/api/users/location`);
+            const response = await fetch(`${apiUrl}/users/location`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const data = await response.json();
@@ -156,7 +156,7 @@ const Leaderboard: React.FC = () => {
     // Get leaderboard statistics every 15 seconds for live updating carousel
     const getLeaderboardStats = async (_signal?: AbortSignal) => {
         try {
-            const response = await fetch(`${apiUrl}/api/stats/brief`);
+            const response = await fetch(`${apiUrl}/stats/brief`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data: LeaderboardStatsData = await response.json();
             setLeaderboardData(data);

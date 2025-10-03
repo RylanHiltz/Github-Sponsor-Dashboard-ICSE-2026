@@ -57,7 +57,7 @@ const UserStatsPage = ({ playSignal }: { playSignal: number }) => {
     const getBrief = async () => {
 
         try {
-            const response = await fetch(`${apiUrl}/api/brief-user-stats`);
+            const response = await fetch(`${apiUrl}/brief-user-stats`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const data = await response.json() as BriefStats;
@@ -256,7 +256,7 @@ const LocationDistributionGraph = () => {
 
     const getGenderData = async () => {
         try {
-            const response = await fetch(`${apiUrl}/api/user-stats`);
+            const response = await fetch(`${apiUrl}/user-stats`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const raw = await response.json();
@@ -410,7 +410,7 @@ const GenderDataGraph = () => {
 
     const getGenderData = async () => {
         try {
-            const response = await fetch(`${apiUrl}/api/gender-stats`)
+            const response = await fetch(`${apiUrl}/gender-stats`)
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const data = await response.json();
@@ -520,7 +520,7 @@ const SponsorshipsGraph = () => {
 
     const getSponsorshipData = async () => {
         try {
-            const response = await fetch(`${apiUrl}/api/user-sponsorship-stats`);
+            const response = await fetch(`${apiUrl}/user-sponsorship-stats`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const data = await response.json();
