@@ -22,3 +22,6 @@ scraper.log.*
 worker_state.json
 
 /local_files
+
+# Frontend build output
+/frontend/dist
