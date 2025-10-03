@@ -240,8 +240,19 @@ def getUserData(github_id: int, db, is_enriched=False, identity=None):
                 prev_has_pronouns = bool(identity.get("pronouns", False))
                 prev_gender = identity.get("gender", None)
 
-            # scrape users pronouns
-            has_pronouns, gender_data = scrapePronouns(user.username)
+            # Preset variables, if GitHub is not provided for scraping, function will skip pronouns
+            # and fall back on gpt-4o-mini query
+            has_pronouns = False
+            gender_data = None
+
+            # Conditionally scrape pronouns only if credentials are provided in the .env file
+            if os.getenv("gh_username") and os.getenv("gh_password"):
+                try:
+                    has_pronouns, gender_data = scrapePronouns(user.username)
+                except Exception as e:
+                    # Log the error but don't crash the whole process
+                    logging.error(f"Pronoun scraping failed for {user.username}: {e}")
+
             user.has_pronouns = bool(has_pronouns)
 
             if not is_enriched:
