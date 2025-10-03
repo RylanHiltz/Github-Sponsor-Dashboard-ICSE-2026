@@ -1,24 +1,19 @@
 import React, { useContext } from 'react';
 import { useNavigate, useLocation, Outlet, Link } from 'react-router';
-import { Layout, Menu, theme, Statistic } from 'antd';
+import { Layout, Menu, theme } from 'antd';
 import Search from '../components/SearchBar';
 import { SearchProvider, SearchContext } from '../context/SearchContext';
 import DarkmodeButton from '../components/DarkmodeButton';
 
 import { AiFillGithub } from "react-icons/ai";
 import { MdSpaceDashboard } from "react-icons/md";
-import { MdPersonAddAlt1 } from "react-icons/md";
 import { IoMdStats } from "react-icons/io";
-import { IoDocumentText } from "react-icons/io5";
-
 
 
 const { Header, Content, Sider } = Layout;
 
 const DashboardContent: React.FC = () => {
 
-    const { Timer } = Statistic;
-    const deadline = Date.now() + 1000 * 60 * 5;
     const navigate = useNavigate();
     const location = useLocation();
     const searchContext = useContext(SearchContext);
@@ -65,13 +60,6 @@ const DashboardContent: React.FC = () => {
                     </span>
                 </div>
                 <div className='flex gap-3 pr-[20px] items-center'>
-                    {/* Timer */}
-                    {/* {location.pathname === '/' && (
-                        <div className={`border-[1px] flex items-center p-2 rounded-md h-[32px]`} style={{ borderColor: colorBorder }}>
-                            <p className='text-[12px] font-medium select-none whitespace-nowrap'>Refresh in&nbsp;</p>
-                            <Timer type='countdown' value={deadline} format="m:ss" valueStyle={{ fontSize: 12 }} />
-                        </div>
-                    )} */}
                     {/* Darkmode Button */}
                     <DarkmodeButton />
                 </div>

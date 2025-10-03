@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Button, theme, Skeleton } from "antd";
+import { theme, Skeleton } from "antd";
 import styles from "../Statistics.module.css"
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { apiUrl } from "../../../api";
-import { Bar, Pie, Doughnut } from "react-chartjs-2";
+import { Bar, Doughnut } from "react-chartjs-2";
 import {
     Chart as ChartJS,
     CategoryScale,

@@ -1,8 +1,6 @@
-import { Tabs, Button } from "antd";
+import { Tabs } from "antd";
 import { useState } from "react";
 
-import UserStatsPage from "./tabs/UserStatistics";
-import OrgStatsPage from "./tabs/OrgStatistics";
 import GeneralStatsPage from "./tabs/GeneralStatistics";
 
 export default function Statistics() {
