@@ -41,7 +41,7 @@ export const theme = {
         }
       },
       cardBg: {
-        light: '#F7F7F7',
+        light: '#FAFAFA',
         dark: '#141414',
       },
       gridColor: {

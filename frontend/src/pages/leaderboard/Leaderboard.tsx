@@ -59,7 +59,7 @@ const Leaderboard: React.FC = () => {
     if (!searchContext) {
         throw new Error('Leaderboard must be used within a SearchProvider');
     }
-    const { searchTerm } = searchContext;
+    const { searchTerm, setSearchTerm } = searchContext;
     const debouncedSearchTerm = useDebounce(searchTerm, 600); // Create debounced value
 
     // Table data consts
@@ -70,6 +70,13 @@ const Leaderboard: React.FC = () => {
     });
     const [filters, setFilters] = useState<Record<string, FilterValue | null>>({});
     const [sorters, setSorters] = useState<Record<string, SortOrder | null>>({});
+
+    const handleClearFilters = () => {
+        setFilters({});
+        setSorters({});
+        setSearchTerm('');
+        setPagination(prev => ({ ...prev, current: 1 }));
+    };
 
     const fetchUsers = async (
         currentPagination: TablePaginationConfig,
@@ -166,6 +173,7 @@ const Leaderboard: React.FC = () => {
             width: 115,
             sortDirections: ["descend", "ascend"],
             sorter: true,
+            sortOrder: sorters.username || null,
             render: (_: any, record: LeaderboardUser) => (
                 <>
                     <span className='flex items-center gap-1'>
@@ -187,6 +195,7 @@ const Leaderboard: React.FC = () => {
             key: "name",
             width: 110,
             sorter: true,
+            sortOrder: sorters.name || null,
             sortDirections: ["descend", "ascend"],
             render: (text: string) =>
                 text && text.length > 13 ? `${text.slice(0, 11)}...` : text,
@@ -206,6 +215,7 @@ const Leaderboard: React.FC = () => {
                     value: 'Organization',
                 },
             ],
+            filteredValue: filters.type || null,
         },
         {
             title: "Gender",
@@ -230,6 +240,7 @@ const Leaderboard: React.FC = () => {
                     value: 'Unknown',
                 },
             ],
+            filteredValue: filters.gender || null,
         },
         {
             title: "Location",
@@ -238,15 +249,15 @@ const Leaderboard: React.FC = () => {
             width: 110,
             filters: locationFilters,
             filterSearch: true,
+            filteredValue: filters.location || null,
         },
         {
             title: "Followers",
             dataIndex: "followers",
             key: "followers",
             width: 100,
-            sorter: {
-                multiple: 2,
-            },
+            sorter: true,
+            sortOrder: sorters.followers || null,
             sortDirections: ["descend", "ascend"],
 
         },
@@ -255,9 +266,8 @@ const Leaderboard: React.FC = () => {
             dataIndex: "following",
             key: "following",
             width: 100,
-            sorter: {
-                multiple: 2,
-            },
+            sorter: true,
+            sortOrder: sorters.following || null,
             sortDirections: ["descend", "ascend"]
         },
         {
@@ -265,9 +275,8 @@ const Leaderboard: React.FC = () => {
             dataIndex: "public_repos",
             key: "repos",
             width: 75,
-            sorter: {
-                multiple: 1,
-            },
+            sorter: true,
+            sortOrder: sorters.public_repos || null,
             sortDirections: ["descend", "ascend"]
         },
         {
@@ -275,9 +284,8 @@ const Leaderboard: React.FC = () => {
             dataIndex: "total_sponsors",
             key: "sponsors",
             width: 100,
-            sorter: {
-                multiple: 2,
-            },
+            sorter: true,
+            sortOrder: sorters.total_sponsors || null,
             sortDirections: ["descend", "ascend"]
         },
         {
@@ -285,9 +293,8 @@ const Leaderboard: React.FC = () => {
             dataIndex: "total_sponsoring",
             key: "sponsoring",
             width: 110,
-            sorter: {
-                multiple: 2,
-            },
+            sorter: true,
+            sortOrder: sorters.total_sponsoring || null,
             sortDirections: ["descend", "ascend"]
         },
         {
@@ -301,9 +308,8 @@ const Leaderboard: React.FC = () => {
                     ${Math.round(record.estimated_earnings)}<span style={{ fontWeight: 400, fontSize: 12 }}>+ USD/mo</span>
                 </span>
             ),
-            sorter: {
-                multiple: 3,
-            },
+            sorter: true,
+            sortOrder: sorters.estimated_earnings || null,
             sortDirections: ["descend", "ascend"]
         },
     ];
@@ -324,6 +330,7 @@ const Leaderboard: React.FC = () => {
 
         setSorters(formattedSorters);
         setFilters(newFilters);
+        // Reset to page 1 when filters or sorters change
         setPagination(prev => ({
             ...prev,
             current: 1,
@@ -379,12 +386,12 @@ const Leaderboard: React.FC = () => {
             // Otherwise, fetch users with the current state
             fetchUsers(pagination, filters, sorters);
         }
-    }, [debouncedSearchTerm, filters, sorters]); // Use debouncedSearchTerm here
+    }, [debouncedSearchTerm]); // Use debouncedSearchTerm here
 
     useEffect(() => {
         fetchUsers(pagination, filters, sorters);
 
-    }, [pagination.current, pagination.pageSize, filters, sorters,]);
+    }, [pagination.current, pagination.pageSize, filters, sorters]);
 
 
     return (
@@ -418,8 +425,7 @@ const Leaderboard: React.FC = () => {
                     </div>
                     <div className='flex-shrink-0 flex justify-end pt-2'>
                         <div className='flex w-full justify-between'>
-                            {/* TODO: implement clear filters button */}
-                            <Button icon={<MdClear />} iconPosition='end'>Clear Filters</Button>
+                            <Button icon={<MdClear />} iconPosition='end' onClick={handleClearFilters}>Clear Filters</Button>
                             <Pagination
                                 simple
                                 current={pagination.current}

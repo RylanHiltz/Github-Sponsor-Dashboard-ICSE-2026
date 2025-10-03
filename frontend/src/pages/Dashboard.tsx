@@ -31,8 +31,8 @@ const DashboardContent: React.FC = () => {
     const routes: { [key: string]: string } = {
         '1': '/',
         '2': '/statistics',
-        '3': '/request-user',
-        '4': '/docs'
+        // '3': '/request-user',
+        // '4': '/docs'
     };
 
     const menuKeyMap = Object.fromEntries(
@@ -66,12 +66,12 @@ const DashboardContent: React.FC = () => {
                 </div>
                 <div className='flex gap-3 pr-[20px] items-center'>
                     {/* Timer */}
-                    {location.pathname === '/' && (
+                    {/* {location.pathname === '/' && (
                         <div className={`border-[1px] flex items-center p-2 rounded-md h-[32px]`} style={{ borderColor: colorBorder }}>
                             <p className='text-[12px] font-medium select-none whitespace-nowrap'>Refresh in&nbsp;</p>
                             <Timer type='countdown' value={deadline} format="m:ss" valueStyle={{ fontSize: 12 }} />
                         </div>
-                    )}
+                    )} */}
                     {/* Darkmode Button */}
                     <DarkmodeButton />
                 </div>
@@ -98,16 +98,16 @@ const DashboardContent: React.FC = () => {
                                 label: 'Analytics',
                                 icon: <IoMdStats />
                             },
-                            {
-                                key: '3',
-                                label: 'Request User',
-                                icon: <MdPersonAddAlt1 />
-                            },
-                            {
-                                key: '4',
-                                label: 'Docs',
-                                icon: <IoDocumentText />
-                            },
+                            // {
+                            //     key: '3',
+                            //     label: 'Request User',
+                            //     icon: <MdPersonAddAlt1 />
+                            // },
+                            // {
+                            //     key: '4',
+                            //     label: 'Docs',
+                            //     icon: <IoDocumentText />
+                            // },
                         ]}
                     />
                 </Sider>

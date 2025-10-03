@@ -14,16 +14,16 @@ export default function Statistics() {
             key: "1",
             children: <GeneralStatsPage playSignal={userStatsTick} />,
         },
-        {
-            label: "User Analytics",
-            key: "2",
-            children: <UserStatsPage playSignal={userStatsTick} />,
-        },
-        {
-            label: "Organization Analytics",
-            key: "3",
-            children: <></>,
-        },
+        // {
+        //     label: "User Analytics",
+        //     key: "2",
+        //     children: <UserStatsPage playSignal={userStatsTick} />,
+        // },
+        // {
+        //     label: "Organization Analytics",
+        //     key: "3",
+        //     children: <></>,
+        // },
     ];
 
 
