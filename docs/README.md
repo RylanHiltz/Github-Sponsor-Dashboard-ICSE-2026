@@ -2,7 +2,16 @@
 
 ![github sponsorship dashboard preview](images/github-dashboard.png)
 
-[ISCE-2026 Demo Video Link](https://youtu.be/Wr2YlItWXvM)
+<p align="center">
+  <a href="https://youtu.be/Wr2YlItWXvM">
+    <img src="https://img.shields.io/badge/Watch%20Demo-YouTube-red?style=for-the-badge&logo=youtube" alt="Watch Demo Video">
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://github-sponsorships.com/">
+    <img src="https://img.shields.io/badge/Visit%20Live%20Site-58A6FF?style=for-the-badge&logo=vercel" alt="Visit Live Site">
+  </a>
+</p>
+
 
 ## 1. Overview
 
