@@ -3,11 +3,10 @@
 ![github sponsorship dashboard preview](images/github-dashboard.png)
 
 <p align="center">
-  <a href="https://youtu.be/Wr2YlItWXvM">
+  <a href="https://youtu.be/Wr2YlItWXvM" style="text-decoration: none; border: none;">
     <img src="https://img.shields.io/badge/Watch%20Demo-YouTube-red?style=for-the-badge&logo=youtube" alt="Watch Demo Video">
   </a>
-  &nbsp;&nbsp;
-  <a href="https://github-sponsorships.com/">
+  <a href="https://github-sponsorships.com/" style="text-decoration: none; border: none;">
     <img src="https://img.shields.io/badge/Visit%20Live%20Site-58A6FF?style=for-the-badge&logo=vercel" alt="Visit Live Site">
   </a>
 </p>
