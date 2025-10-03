@@ -1,5 +1,5 @@
-import React from "react"
-import { Input, Button } from "antd"
+import React, { useEffect } from "react"
+import { Input } from "antd"
 import { useContext } from "react"
 import { SearchContext } from '../context/SearchContext';
 
@@ -17,9 +17,20 @@ const Search: React.FC<SearchProps> = ({ onSubmit }) => {
 
     const { searchTerm, setSearchTerm } = searchContext;
 
-    const handleSearch = () => {
-        onSubmit(searchTerm);
-    };
+    useEffect(() => {
+        // Set up a timer to call the onSubmit function
+        const timerId = setTimeout(() => {
+            onSubmit(searchTerm);
+        }, 1500); // 1.5-second debounce delay
+
+        // This is the cleanup function.
+        // It runs when the component unmounts or before the effect runs again.
+        // This clears the previous timer, so the search only happens
+        // after the user has stopped typing.
+        return () => {
+            clearTimeout(timerId);
+        };
+    }, [searchTerm, onSubmit]); // Re-run the effect when searchTerm or onSubmit changes
 
     return (
         <>
@@ -29,11 +40,8 @@ const Search: React.FC<SearchProps> = ({ onSubmit }) => {
                 className='min-w-[300px] w-[50%]'
                 placeholder='Search by name or username'
                 onChange={e => setSearchTerm(e.target.value)}
-                onKeyDown={e => {
-                    if (e.key === "Enter") {
-                        handleSearch();
-                    }
-                }}
+            // The onKeyDown for Enter is no longer needed for search,
+            // as the search will trigger automatically after the user stops typing.
             />
         </>
     )

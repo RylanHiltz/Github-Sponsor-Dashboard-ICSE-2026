@@ -7,6 +7,7 @@ import { createStyles } from 'antd-style';
 import Carousel from '../../components/Carousel';
 import { SearchContext } from '../../context/SearchContext';
 import { MdClear } from "react-icons/md";
+import { useDebounce } from '../../hooks/debounce'; // Import the new hook
 
 // Type imports 
 import type { TableProps, TablePaginationConfig } from 'antd';
@@ -59,6 +60,7 @@ const Leaderboard: React.FC = () => {
         throw new Error('Leaderboard must be used within a SearchProvider');
     }
     const { searchTerm } = searchContext;
+    const debouncedSearchTerm = useDebounce(searchTerm, 600); // Create debounced value
 
     // Table data consts
     const [pagination, setPagination] = useState<TablePaginationConfig>({
@@ -377,7 +379,7 @@ const Leaderboard: React.FC = () => {
             // Otherwise, fetch users with the current state
             fetchUsers(pagination, filters, sorters);
         }
-    }, [searchTerm, filters, sorters]);
+    }, [debouncedSearchTerm, filters, sorters]); // Use debouncedSearchTerm here
 
     useEffect(() => {
         fetchUsers(pagination, filters, sorters);
