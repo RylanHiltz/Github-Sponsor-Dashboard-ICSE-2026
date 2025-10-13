@@ -144,6 +144,25 @@ def enrichUser(github_id: int, db, enriched=False, identity=None):
         return None
 
     with db.cursor() as cur:
+
+        cur.execute(
+            "SELECT id, github_id FROM users WHERE username = %s LIMIT 1;",
+            (user.username,),
+        )
+        row = cur.fetchone()
+        if row and row[1] != user.github_id:
+            existing_id, _ = row
+            # Merge strategy: remove placeholder row for this github_id (if any),
+            # then assign the correct github_id to the username row.
+            cur.execute(
+                "DELETE FROM users WHERE github_id = %s AND id <> %s;",
+                (user.github_id, existing_id),
+            )
+            cur.execute(
+                "UPDATE users SET github_id = %s WHERE id = %s;",
+                (user.github_id, existing_id),
+            )
+
         cur.execute(
             """
             UPDATE users SET
