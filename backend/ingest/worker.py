@@ -196,6 +196,11 @@ class IngestWorker:
                     get_sponsorships(user.username, github_id, user.type)
                 )
 
+                # Always run the sync functions. They are responsible for adding new relationships
+                # AND removing old ones if the new lists are empty.
+                syncSponsors(github_id, sponsors, self.conn)
+                syncSponsorships(github_id, sponsoring, self.conn)
+
                 # Create a list of only the unique github_ids
                 # This is important if bi-directional sponsor relations exist
                 unique_users = list(set(sponsors) | set(sponsoring))
@@ -210,10 +215,6 @@ class IngestWorker:
                     # Batch add users at a middle standing priority
                     batchCreateUser(unique_users, db=self.conn)
                     batchAddQueue(unique_users, priority=5, db=self.conn)
-
-                    # Add users and organizations to the users table & queue (name and is_enriched defaults to FALSE)
-                    syncSponsors(user_id, sponsors, self.conn)
-                    syncSponsorships(user_id, sponsoring, self.conn)
 
                     # Collect the user activity from the Github API ONLY if the specified user HAS a sponsor or is sponsoring
                     # Users without either dont need their user activity collected as they will not be shown in the dataset.
